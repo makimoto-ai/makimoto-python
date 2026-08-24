@@ -4,6 +4,10 @@ All notable changes to `makimoto-kawa` are documented here. Format loosely follo
 
 <!-- version list -->
 
+## v1.0.0 (2026-08-24)
+
+- Initial Release
+
 ## 0.1.0 - 2026-08-27
 
 Initial release.
@@ -18,4 +22,3 @@ Initial release.
 - Response models (`Job`, `Segment`, `TranscriptResult`, `JobError`, `Usage`) as `pydantic` models, replacing hand-written parsing.
 - Full test suite (`pytest` + `pytest-httpx2`).
 - MIT licensed.
-
