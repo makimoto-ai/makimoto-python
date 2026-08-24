@@ -56,6 +56,12 @@ makimoto = ["py.typed"]
 [tool.semantic_release]
 commit_parser = "conventional"
 major_on_zero = false
+# Without this, semantic-release manages tags/changelog/releases but never
+# actually updates pyproject.toml's own version field, confirmed the hard
+# way, it stayed "0.1.0" through two real release runs while the tags it
+# created said 1.0.0/1.0.1. This keeps the package's own declared version
+# in sync with what gets tagged.
+version_toml = ["pyproject.toml:project.version"]
 # Defaults to false, which forbids the computed version from ever landing
 # on 0.x.y at all, forcing a jump straight to 1.0.0 on the very first
 # release regardless of major_on_zero. This is the actual project's real

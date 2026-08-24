@@ -1,8 +1,10 @@
 name: Release
 
 on:
-  push:
-    branches: [main]
+  # TEMPORARILY manual-only (workflow_dispatch) while cleaning up two bad
+  # auto-created releases (v1.0.0, v1.0.1) caused by a config gap. Switch
+  # back to `push: branches: [main]` once verified via a manual run.
+  workflow_dispatch:
 
 permissions:
   contents: write

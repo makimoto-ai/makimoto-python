@@ -4,9 +4,6 @@ All notable changes to `makimoto-kawa` are documented here. Format loosely follo
 
 <!-- version list -->
 
-## v1.0.1 (2026-08-24)
-
-
 ## 0.1.0 - 2026-08-27
 
 Initial release.
