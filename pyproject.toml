@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "makimoto-kawa"
+version = "0.1.0"
+description = "Official Python SDK for the Makimoto transcription API"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"  # httpx2 requires 3.10+, bumped from 3.9 for this reason
+authors = [
+    { name = "Xavier Choa", email = "xavier.choa@makimoto.ai" },  # maintainer contact for now
+]
+dependencies = [
+    "httpx2>=2.7.0,<3",
+    "pydantic>=1.10.13,<3",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+    # No "License :: OSI Approved :: MIT License" classifier: the SPDX
+    # `license = "MIT"` expression above supersedes it (PEP 639), modern
+    # setuptools rejects having both.
+]
+
+[project.urls]
+Homepage = "https://github.com/makimoto-ai/makimoto-python"
+Repository = "https://github.com/makimoto-ai/makimoto-python"
+Issues = "https://github.com/makimoto-ai/makimoto-python/issues"
+Changelog = "https://github.com/makimoto-ai/makimoto-python/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-httpx2>=1.0",
+    "httpx>=0.25.0",
+    "gitlint>=0.19",
+    "pre-commit>=4.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+makimoto = ["py.typed"]
+
+[tool.semantic_release]
+commit_parser = "conventional"
+major_on_zero = false
+
+[tool.semantic_release.branches.main]
+match = "(main|master)"
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGELOG.md"
