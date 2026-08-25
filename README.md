@@ -2,7 +2,7 @@
 
 Official Python SDK for the Makimoto transcription API.
 
-This package wraps the [Kawa](https://github.com/makimoto-ai/kawa) transcription API. For the interactive [playground](https://github.com/makimoto-ai/kawa/tree/main/demo), full [API docs](https://github.com/makimoto-ai/kawa/blob/main/docs/api-authentication-quickstart.md), and the [OpenAPI spec](https://github.com/makimoto-ai/kawa/blob/main/docs/openapi.json), see the main `kawa` repo. Prefer a zero-dependency, copy-paste client instead of a pip package? See [`kawa_client.py`](https://github.com/makimoto-ai/kawa/blob/main/demo/kawa_client.py) there.
+This is the maintained, typed client for [Kawa](https://github.com/makimoto-ai/kawa)'s transcription API, with `pydantic` response models, structured exceptions, and a tested, versioned release process, built on top of the same API as the reference client in the main `kawa` repo. For the interactive [playground](https://github.com/makimoto-ai/kawa/tree/main/demo), full [API docs](https://github.com/makimoto-ai/kawa/blob/main/docs/api-authentication-quickstart.md), and the [OpenAPI spec](https://github.com/makimoto-ai/kawa/blob/main/docs/openapi.json), see the main `kawa` repo. Prefer a zero-dependency, copy-paste client instead of a pip package? See [`kawa_client.py`](https://github.com/makimoto-ai/kawa/blob/main/demo/kawa_client.py) there.
 
 [![CI](https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml/badge.svg)](https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml)
 [![PyPI version](https://img.shields.io/pypi/v/makimoto-kawa)](https://pypi.org/project/makimoto-kawa/)
