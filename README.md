@@ -102,6 +102,6 @@ logging.getLogger("httpx2").setLevel(logging.DEBUG)                 # every requ
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## License
+## Licence
 
 [MIT](LICENSE)
