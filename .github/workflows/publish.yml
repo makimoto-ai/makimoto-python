@@ -1,0 +1,28 @@
+name: Publish to PyPI
+
+# Deliberately workflow_dispatch-only, never automatic. A bad publish here
+# can't be deleted or overwritten. Run publish-testpypi.yml first and check the result before ever
+# running this one. When triggering manually, pick the exact tag (e.g.
+# v0.1.0) in the "Use workflow from" branch/tag selector, not "main", so
+# what gets built matches what was actually released.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write  # PyPI Trusted Publishing (OIDC), no token/secret needed
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi  # must match the environment name set on the pending
+                       # publisher registered at pypi.org
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build
+      - run: python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
