@@ -4,6 +4,25 @@ All notable changes to `makimoto-kawa` are documented here. Format loosely follo
 
 <!-- version list -->
 
+## v0.1.1 (2026-08-25)
+
+### Bug Fixes
+
+- Fixed publish workflows to testpypi and pypi
+  ([`da4f631`](https://github.com/makimoto-ai/makimoto-python/commit/da4f6316db647576242be5314cfa0b3ec248dfbc))
+
+### Chores
+
+- Added publish workflow files to both testpypi and pypi
+  ([`4002f14`](https://github.com/makimoto-ai/makimoto-python/commit/4002f1485c3829eec91fc551ee43399dfc6bf0e3))
+
+- Remove stray root-level try_it.py
+  ([`f51fc54`](https://github.com/makimoto-ai/makimoto-python/commit/f51fc54e9d9a63e1d9e92278d5f1892d0ba49372))
+
+- Restore release.yml trigger, del dupe changelong entry
+  ([`737676d`](https://github.com/makimoto-ai/makimoto-python/commit/737676d98f0fe87d5f3af07a041d8d7fec92addb))
+
+
 ## v0.1.0 (2026-08-24)
 
 Initial release.
