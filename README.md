@@ -2,6 +2,11 @@
 
 Official Python SDK for the Makimoto transcription API.
 
+[![CI](https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml/badge.svg)](https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml)
+[![PyPI version](https://img.shields.io/pypi/v/makimoto-kawa)](https://pypi.org/project/makimoto-kawa/)
+[![Python versions](https://img.shields.io/pypi/pyversions/makimoto-kawa)](https://pypi.org/project/makimoto-kawa/)
+[![License](https://img.shields.io/github/license/makimoto-ai/makimoto-python)](LICENSE)
+
 ## Install
 
 Requires Python 3.10+.
@@ -42,6 +47,8 @@ if job.status == "succeeded":
 else:
     print(job.error)
 ```
+
+See [`examples/quickstart.py`](examples/quickstart.py) for a complete, runnable script, it ships with a small sample audio file, so `python examples/quickstart.py` works out of the box once `MAKIMOTO_API_TOKEN` is set.
 
 `transcribe()` submits the recording and polls until it's done in one call, raising `TimeoutError` if it never finishes. For manual control, e.g. streaming live status updates to a UI, the lower-level primitives are still there:
 
@@ -91,10 +98,7 @@ logging.getLogger("httpx2").setLevel(logging.DEBUG)                 # every requ
 
 ## Development
 
-```bash
-pip install -e ".[dev]"
-pytest
-```
+See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 

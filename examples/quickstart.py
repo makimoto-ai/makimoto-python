@@ -1,10 +1,10 @@
-"""Manual, real-API smoke test for the makimoto SDK, run as a developer would.
+"""Runnable demo of the makimoto SDK against the real production API.
 
-Not a unit test, not collected by pytest. Exercises the actual installed
-package against the real production API.
-
-    $env:MAKIMOTO_API_TOKEN = "<your real token>"     # PowerShell
-    ./.venv/Scripts/python tests/try_it.py
+    export MAKIMOTO_API_TOKEN="<your real token>"      # bash
+    $env:MAKIMOTO_API_TOKEN = "<your real token>"       # PowerShell
+    python examples/quickstart.py                       # uses the bundled
+                                                          # sample audio
+    python examples/quickstart.py path/to/your/audio.wav # or your own file
 
 Set MAKIMOTO_DEBUG=1 to also see every HTTP request/response (from httpx2's
 own logger) and the SDK's own logging (e.g. poll() giving up), for example:
@@ -17,10 +17,12 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from pathlib import Path
 
 from makimoto.kawa import KawaClient, KawaError
 
-DEFAULT_AUDIO = r"C:\repo\kawa\samples-audio\jackhammer.wav"
+# See audio/ATTRIBUTION.md for this file's source and licence terms.
+DEFAULT_AUDIO = Path(__file__).parent / "audio" / "jackhammer.wav"
 
 if os.getenv("MAKIMOTO_DEBUG"):
     logging.basicConfig(level=logging.DEBUG)
@@ -38,9 +40,7 @@ def main() -> int:
     # client.close() explicitly, matters more for a long-running app than a
     # short script like this, but this is also the intended usage pattern.
     with KawaClient(token=token, api_url="https://api.makimoto.ai") as client:
-        # One call: submits, polls internally, raises on timeout. This is the
-        # whole point of transcribe() over the old create_transcription()+poll()
-        # two-step, no manual loop needed for the common case.
+        # One call: submits, polls internally, raises on timeout.
         try:
             result = client.transcribe(audio, language="en")
         except KawaError as exc:
