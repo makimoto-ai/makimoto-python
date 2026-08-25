@@ -1,25 +1,51 @@
 name: Publish to TestPyPI
 
-# Dry run of the real publish workflow, same mechanism, against test.pypi.org
+# Automatic, unlike publish.yml: TestPyPI has nothing irreversible at
+# stake, so this fires on every new version tag as a health-check that the
+# publishing pipeline still works, no need to wait on a manual click.
+# Triggering on tags rather than every push to main matters here, version
+# only changes on an actual semantic-release release, so re-running this
+# on an unchanged version would just fail with "file already exists".
+# workflow_dispatch is kept too, for an ad hoc re-run against the current
+# version without cutting a new one.
 
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
 
-permissions:
-  id-token: write  # PyPI Trusted Publishing (OIDC), no token/secret needed
-
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
-    environment: testpypi  # must match the environment name set on the
-                           # pending publisher registered at test.pypi.org
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install build
       - run: python -m build
+      - uses: actions/upload-artifact@v5
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi  # must match the environment name set on the pending
+                      # publisher registered at test.pypi.org
+      url: https://test.pypi.org/project/makimoto-kawa/
+    permissions:
+      id-token: write  # PyPI Trusted Publishing (OIDC), no token/secret
+                       # needed
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: dist
+          path: dist/
       - name: Publish to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
