@@ -1,5 +1,7 @@
 # Usage
 
+*Last updated: 2026-08-26*
+
 This page shows a quick demonstration of how to make use of the SDK. 
 
 ```python

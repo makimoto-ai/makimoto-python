@@ -1,5 +1,7 @@
 # Installation
 
+*Last updated: 2026-08-26*
+
 Requires Python 3.10+.
 
 ```bash
