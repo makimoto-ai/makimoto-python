@@ -6,7 +6,7 @@
   not this file.
 -->
 
-# Python SDK API reference
+# Python SDK API Reference
 
 ## Client
 

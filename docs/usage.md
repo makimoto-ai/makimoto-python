@@ -60,4 +60,4 @@ logging.getLogger("makimoto.kawa.client").setLevel(logging.DEBUG)  # this SDK's 
 logging.getLogger("httpx2").setLevel(logging.DEBUG)                 # every request/response
 ```
 
-See the [API reference](api-reference.md) for the full set of methods and models.
+See the [SDK API Reference](api-reference.md) for the full set of methods and models.
