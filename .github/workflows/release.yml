@@ -22,7 +22,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install python-semantic-release
+      - name: Install python-semantic-release
+        # gitpython<3.1.60: 3.1.60 removed Actor.name_email_regex, which
+        # python-semantic-release 10.6.1 still relies on internally, real
+        # incident, confirmed by bisecting GitPython's own source between
+        # 3.1.59 (has it) and 3.1.60 (doesn't). Neither dependency was
+        # pinned before, so a routine GitPython release silently broke
+        # this workflow. Pinning both here, not just gitpython, so this
+        # doesn't quietly drift again.
+        run: pip install "python-semantic-release==10.6.1" "gitpython<3.1.60"
       - name: Compute next version from Conventional Commits, tag, update CHANGELOG.md, create a GitHub release
         run: semantic-release version
         env:

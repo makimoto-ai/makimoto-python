@@ -92,6 +92,7 @@ Quiet by default. To see what the SDK is doing (credential source, a poll that g
 
 ```python
 import logging
+logging.basicConfig()  # attaches a handler so the lines below actually print somewhere
 logging.getLogger("makimoto.kawa.client").setLevel(logging.DEBUG)  # this SDK's own events
 logging.getLogger("httpx2").setLevel(logging.DEBUG)                 # every request/response
 ```
