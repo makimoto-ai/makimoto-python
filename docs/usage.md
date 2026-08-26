@@ -1,5 +1,7 @@
 # Usage
 
+This page shows a quick demonstration of how to make use of the SDK. 
+
 ```python
 from makimoto import kawa
 
@@ -15,7 +17,7 @@ else:
 
 See the [quickstart examples](https://github.com/makimoto-ai/makimoto-python/blob/main/examples/quickstart.py) for a complete, runnable script; it ships with a small sample audio file, so `python examples/quickstart.py` works out of the box once `MAKIMOTO_API_TOKEN` is set.
 
-`transcribe()` submits the recording and polls until it's done in one call, raising `TimeoutError` if it never finishes. For manual control, for example streaming live status updates to a UI, the lower-level primitives are still there:
+`transcribe()` submits the recording and polls until it's done in one call, raising `TimeoutError` if it never finishes. For manual control (e.g. streaming live status updates to a UI), the lower-level primitives are still there:
 
 ```python
 job = client.create_transcription("call.mp3", language="en")
