@@ -11,27 +11,45 @@
 ## Client
 
 ::: makimoto.kawa.KawaClient
+    options:
+      show_root_heading: true
+      heading_level: 3
 
 ## Models
 
 ::: makimoto.kawa.Job
+    options:
+      show_root_heading: true
+      heading_level: 3
 
 ::: makimoto.kawa.TranscriptResult
+    options:
+      show_root_heading: true
+      heading_level: 3
 
 ::: makimoto.kawa.Segment
+    options:
+      show_root_heading: true
+      heading_level: 3
 
 ::: makimoto.kawa.JobError
+    options:
+      show_root_heading: true
+      heading_level: 3
 
 ::: makimoto.kawa.Usage
+    options:
+      show_root_heading: true
+      heading_level: 3
 
 ## Exceptions
 
 ::: makimoto.kawa.KawaError
+    options:
+      show_root_heading: true
+      heading_level: 3
 
 ::: makimoto.kawa.KawaValidationError
-
-## Constants
-
-::: makimoto.kawa.DEFAULT_API_URL
-
-::: makimoto.kawa.TERMINAL_STATUSES
+    options:
+      show_root_heading: true
+      heading_level: 3
