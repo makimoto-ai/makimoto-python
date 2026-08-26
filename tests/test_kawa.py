@@ -131,6 +131,24 @@ def test_create_transcription_success(httpx2_mock, tmp_path):
     assert job.status == "processing"
 
 
+def test_create_transcription_actually_sends_language_and_metadata(httpx2_mock, tmp_path):
+    # The test above only checks the response is parsed correctly, it never
+    # confirms language/metadata were in the outgoing request at all, this does.
+    audio_file = tmp_path / "call.mp3"
+    audio_file.write_bytes(b"fake audio bytes")
+
+    route = httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(202, json={"job_id": "new-job", "status": "processing"})
+    )
+    make_client().create_transcription(audio_file, language="en", metadata={"source": "test"})
+
+    sent = route.calls.last.request.content.decode()
+    assert 'name="language"' in sent
+    assert "\r\n\r\nen\r\n" in sent
+    assert 'name="metadata"' in sent
+    assert '{"source":"test"}' in sent
+
+
 # -- delete_transcription -------------------------------------------------------- #
 
 def test_delete_transcription_success(httpx2_mock):

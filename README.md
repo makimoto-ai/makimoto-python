@@ -1,13 +1,13 @@
 # makimoto
 
-Official Python SDK for [Kawa](https://github.com/makimoto-ai/kawa)'s transcription API. `makimoto` is the shared namespace this SDK lives under, `kawa` is the specific product it talks to, more Makimoto products may get their own subpackage here later.
-
-This is the maintained, typed client, with `pydantic` response models, structured exceptions, and a tested, versioned release process, built on top of the same API as the reference client in the main `kawa` repo. For the interactive [playground](https://github.com/makimoto-ai/kawa/tree/main/demo), full [API docs](https://github.com/makimoto-ai/kawa/blob/main/docs/api-authentication-quickstart.md), and the [OpenAPI spec](https://github.com/makimoto-ai/kawa/blob/main/docs/openapi.json), see the main `kawa` repo. Prefer a zero-dependency, copy-paste client instead of a pip package? See [`kawa_client.py`](https://github.com/makimoto-ai/kawa/blob/main/demo/kawa_client.py) there.
-
 [![CI](https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml/badge.svg)](https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml)
 [![PyPI version](https://img.shields.io/pypi/v/makimoto-kawa)](https://pypi.org/project/makimoto-kawa/)
 [![Python versions](https://img.shields.io/pypi/pyversions/makimoto-kawa)](https://pypi.org/project/makimoto-kawa/)
-[![License](https://img.shields.io/github/license/makimoto-ai/makimoto-python)](LICENSE)
+[![License](https://img.shields.io/github/license/makimoto-ai/makimoto-python?cachebust=1)](LICENSE)
+
+Official Python SDK for [Kawa](https://github.com/makimoto-ai/kawa)'s transcription API. `makimoto` is the shared namespace this SDK lives under, `kawa` is the specific product it talks to, more Makimoto products may get their own subpackage here later.
+
+This is the maintained, typed client, with `pydantic` response models, structured exceptions, and a tested, versioned release process, built on top of the same API as the reference client in the main `kawa` repo. For the interactive [playground](https://github.com/makimoto-ai/kawa/tree/main/demo), full [API docs](https://github.com/makimoto-ai/kawa/blob/main/docs/api-authentication-quickstart.md), and the [OpenAPI spec](https://github.com/makimoto-ai/kawa/blob/main/docs/openapi.json), see the main `kawa` repo. Prefer a zero-dependency, copy-paste client instead of a pip package? See [`kawa_client.py`](https://github.com/makimoto-ai/kawa/blob/main/demo/kawa_client.py) there.
 
 ## Install
 
@@ -80,11 +80,9 @@ with kawa.KawaClient(token="<dashboard-token>") as client:
 Every call raises `kawa.KawaError` on an API-level failure (bad status code, or a response that doesn't match the expected shape), and `kawa.TimeoutError`-compatible `TimeoutError` from `transcribe()` if a job never finishes in time. A failed transcription job (`status == "failed"`) is not an exception, it's a normal result, check `.status`/`.error` as shown above.
 
 ```python
-from makimoto.kawa import KawaError
-
 try:
     job = client.transcribe("call.mp3")
-except KawaError as exc:
+except kawa.KawaError as exc:
     print(exc.status_code, exc.body)
 ```
 

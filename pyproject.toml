@@ -10,7 +10,10 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"  # httpx2 requires 3.10+, bumped from 3.9 for this reason
 authors = [
-    { name = "Xavier Choa", email = "xavier.choa@makimoto.ai" },  # maintainer contact for now
+    { name = "Xavier Choa", email = "xavier.choa@makimoto.ai" },
+]
+maintainers = [
+    { name = "Makimoto", email = "contact@makimoto.ai" },
 ]
 dependencies = [
     "httpx2>=2.7.0,<3",
