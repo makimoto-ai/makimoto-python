@@ -1,8 +1,8 @@
 # makimoto-kawa
 
 [![CI](https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml/badge.svg)](https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml)
-[![PyPI version](https://img.shields.io/pypi/v/makimoto-kawa)](https://pypi.org/project/makimoto-kawa/)
-[![Python versions](https://img.shields.io/pypi/pyversions/makimoto-kawa)](https://pypi.org/project/makimoto-kawa/)
+[![PyPI version](https://img.shields.io/pypi/v/makimoto-kawa?cachebust=1)](https://pypi.org/project/makimoto-kawa/)
+[![Python versions](https://img.shields.io/pypi/pyversions/makimoto-kawa?cachebust=1)](https://pypi.org/project/makimoto-kawa/)
 [![License](https://img.shields.io/github/license/makimoto-ai/makimoto-python?cachebust=1)](https://github.com/makimoto-ai/makimoto-python/blob/main/LICENSE)
 
 Official Python SDK for [Kawa](https://github.com/makimoto-ai/kawa)'s transcription API. `makimoto` is the shared namespace this SDK lives under, `kawa` is the specific product it talks to, more Makimoto products may get their own subpackage here later.
