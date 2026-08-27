@@ -1,9 +1,9 @@
-# makimoto
+# makimoto-kawa
 
 [![CI](https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml/badge.svg)](https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml)
 [![PyPI version](https://img.shields.io/pypi/v/makimoto-kawa)](https://pypi.org/project/makimoto-kawa/)
 [![Python versions](https://img.shields.io/pypi/pyversions/makimoto-kawa)](https://pypi.org/project/makimoto-kawa/)
-[![License](https://img.shields.io/github/license/makimoto-ai/makimoto-python?cachebust=1)](LICENSE)
+[![License](https://img.shields.io/github/license/makimoto-ai/makimoto-python?cachebust=1)](https://github.com/makimoto-ai/makimoto-python/blob/main/LICENSE)
 
 Official Python SDK for [Kawa](https://github.com/makimoto-ai/kawa)'s transcription API. `makimoto` is the shared namespace this SDK lives under, `kawa` is the specific product it talks to, more Makimoto products may get their own subpackage here later.
 
@@ -50,7 +50,7 @@ else:
     print(job.error)
 ```
 
-See [`examples/quickstart.py`](examples/quickstart.py) for a complete, runnable script, it ships with a small sample audio file, so `python examples/quickstart.py` works out of the box once `MAKIMOTO_API_TOKEN` is set.
+See [`examples/quickstart.py`](https://github.com/makimoto-ai/makimoto-python/blob/main/examples/quickstart.py) for a complete, runnable script, it ships with a small sample audio file, so `python examples/quickstart.py` works out of the box once `MAKIMOTO_API_TOKEN` is set.
 
 `transcribe()` submits the recording and polls until it's done in one call, raising `TimeoutError` if it never finishes. For manual control, e.g. streaming live status updates to a UI, the lower-level primitives are still there:
 
@@ -99,8 +99,8 @@ logging.getLogger("httpx2").setLevel(logging.DEBUG)                 # every requ
 
 ## Development
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+See [`CONTRIBUTING.md`](https://github.com/makimoto-ai/makimoto-python/blob/main/CONTRIBUTING.md).
 
 ## Licence
 
-[MIT](LICENSE)
+[MIT](https://github.com/makimoto-ai/makimoto-python/blob/main/LICENSE)
