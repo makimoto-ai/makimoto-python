@@ -52,6 +52,33 @@ def test_list_transcriptions_success(httpx2_mock):
     assert jobs[0].status == "succeeded"
 
 
+def test_list_transcriptions_captures_all_list_only_fields(httpx2_mock):
+    # These fields (confirmed present in real API responses) were previously
+    # silently dropped by pydantic since Job didn't declare them at all.
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "transcriptions": [
+                    {
+                        "job_id": "abc",
+                        "status": "succeeded",
+                        "original_filename": "jackhammer.wav",
+                        "language": "es",
+                        "created_at": "2026-08-26T02:17:38.908Z",
+                        "updated_at": "2026-08-26T02:17:40.398Z",
+                    }
+                ]
+            },
+        )
+    )
+    job = make_client().list_transcriptions()[0]
+    assert job.original_filename == "jackhammer.wav"
+    assert job.language == "es"
+    assert job.created_at == "2026-08-26T02:17:38.908Z"
+    assert job.updated_at == "2026-08-26T02:17:40.398Z"
+
+
 def test_list_transcriptions_alternate_response_keys(httpx2_mock):
     # backend might key the list under "jobs" or "data" instead of "transcriptions"
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
@@ -129,6 +156,20 @@ def test_create_transcription_success(httpx2_mock, tmp_path):
     job = make_client().create_transcription(audio_file, language="en")
     assert job.job_id == "new-job"
     assert job.status == "processing"
+
+
+def test_create_transcription_captures_received_at(httpx2_mock, tmp_path):
+    audio_file = tmp_path / "call.mp3"
+    audio_file.write_bytes(b"fake audio bytes")
+
+    httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(
+            202,
+            json={"job_id": "new-job", "status": "processing", "received_at": "2026-06-11T19:13:22.366Z"},
+        )
+    )
+    job = make_client().create_transcription(audio_file, language="en")
+    assert job.received_at == "2026-06-11T19:13:22.366Z"
 
 
 def test_create_transcription_actually_sends_language_and_metadata(httpx2_mock, tmp_path):

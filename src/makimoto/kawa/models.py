@@ -72,13 +72,24 @@ class Job(BaseModel):
     """A transcription job, in whatever state the API last reported.
 
     ``result`` is only present once ``succeeded``; ``error`` only once
-    ``failed``.
+    ``failed``. The fields below aren't all present on every response, each
+    is only sent by specific endpoints: ``received_at`` only on the response
+    to ``create_transcription()``; ``original_filename``, ``language``,
+    ``created_at`` and ``updated_at`` only on ``list_transcriptions()``
+    entries. ``language`` here is the list view's own top-level field
+    (whatever was requested at submission), distinct from the detected
+    language on ``result.language``, which only exists once a job succeeds.
     """
 
     job_id: str
     status: str = "unknown"
     result: TranscriptResult | None = None
     error: JobError | None = None
+    received_at: str | None = None
+    original_filename: str | None = None
+    language: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
     @model_validator(mode="before")
     @classmethod
