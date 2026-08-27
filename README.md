@@ -7,7 +7,7 @@
 
 Official Python SDK for [Kawa](https://github.com/makimoto-ai/kawa)'s transcription API. `makimoto` is the shared namespace this SDK lives under, `kawa` is the specific product it talks to, more Makimoto products may get their own subpackage here later.
 
-This is the maintained, typed client, with `pydantic` response models, structured exceptions, and a tested, versioned release process, built on top of the same API as the reference client in the main `kawa` repo. For the interactive [playground](https://github.com/makimoto-ai/kawa/tree/main/demo), full [API docs](https://github.com/makimoto-ai/kawa/blob/main/docs/api-authentication-quickstart.md), and the [OpenAPI spec](https://github.com/makimoto-ai/kawa/blob/main/docs/openapi.json), see the main `kawa` repo. Prefer a zero-dependency, copy-paste client instead of a pip package? See [`kawa_client.py`](https://github.com/makimoto-ai/kawa/blob/main/demo/kawa_client.py) there.
+This is the maintained, typed client, with `pydantic` response models, structured exceptions, and a tested, versioned release process, built on top of the same API as the reference client in the main `kawa` repo. For the interactive [playground](https://github.com/makimoto-ai/kawa/tree/main/demo), full [API docs](https://makimoto-ai.github.io/kawa/service/), and the [OpenAPI spec](https://github.com/makimoto-ai/kawa/blob/main/docs/openapi.json), see the main `kawa` repo. Prefer a zero-dependency, copy-paste client instead of a pip package? See [`kawa_client.py`](https://github.com/makimoto-ai/kawa/blob/main/demo/kawa_client.py) there.
 
 ## Install
 
