@@ -4,6 +4,39 @@ All notable changes to `makimoto-kawa` are documented here. Format loosely follo
 
 <!-- version list -->
 
+## v0.1.2 (2026-08-27)
+
+### Bug Fixes
+
+- Correct broken kawa API docs link in README
+  ([`ce1b3a5`](https://github.com/makimoto-ai/makimoto-python/commit/ce1b3a5890b2e8c03a2e2476ff2714aac2d9a4f6))
+
+### Chores
+
+- Edited README and added new test
+  ([`282a079`](https://github.com/makimoto-ai/makimoto-python/commit/282a0793466d9706d66993e67ef4791c62d21166))
+
+- Fix release.yml + readme
+  ([`f9c9843`](https://github.com/makimoto-ai/makimoto-python/commit/f9c9843b71944817a055cbe4b47322c91784ab4f))
+
+### Documentation
+
+- Cache-bust PyPI/Python version badges after first real publish
+  ([`baffa20`](https://github.com/makimoto-ai/makimoto-python/commit/baffa20963d37b02752f995f87f5f06a7670f579))
+
+- Create documentation
+  ([`2bf9d36`](https://github.com/makimoto-ai/makimoto-python/commit/2bf9d36ceabd055bd21542c9a28263ced8b498df))
+
+- Edit 'Licence' spelling to match kawa
+  ([`b73b5d7`](https://github.com/makimoto-ai/makimoto-python/commit/b73b5d720e8314e6a74422b0e15b6496e4ff1151))
+
+- Edit README
+  ([`366da93`](https://github.com/makimoto-ai/makimoto-python/commit/366da935faa37366c7a1c9d660fc29e89ecd4443))
+
+- Exit README to makimoto-kawa
+  ([`e6bbd80`](https://github.com/makimoto-ai/makimoto-python/commit/e6bbd80785de315402cf977c9684dd34cc9ccdf5))
+
+
 ## v0.1.1 (2026-08-25)
 
 ### Bug Fixes
