@@ -4,6 +4,9 @@ All notable changes to `makimoto-kawa` are documented here. Format loosely follo
 
 <!-- version list -->
 
+## v0.1.3 (2026-08-27)
+
+
 ## v0.1.2 (2026-08-27)
 
 ### Bug Fixes
