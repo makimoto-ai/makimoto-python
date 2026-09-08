@@ -1,9 +1,28 @@
 # makimoto-kawa
 
+<!-- Previous Version
 [![CI](https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml/badge.svg)](https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml)
 [![PyPI version](https://img.shields.io/pypi/v/makimoto-kawa?cachebust=1)](https://pypi.org/project/makimoto-kawa/)
 [![Python versions](https://img.shields.io/pypi/pyversions/makimoto-kawa?cachebust=1)](https://pypi.org/project/makimoto-kawa/)
 [![License](https://img.shields.io/github/license/makimoto-ai/makimoto-python?cachebust=1)](https://github.com/makimoto-ai/makimoto-python/blob/main/LICENSE)
+[![Discord Online](https://img.shields.io/discord/1352140878650540062?logo=discord&style=for-the-badge)]
+-->
+
+<p align="center">
+    <a href="https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml"><img src="https://github.com/makimoto-ai/makimoto-python/actions/workflows/ci.yml/badge.svg" alt="GIT CI" /></a>
+    <a href="https://pypi.org/project/makimoto-kawa/"><img src="https://img.shields.io/pypi/v/makimoto-kawa?cachebust=1" alt="PyPI Version"/></a>
+    <a href="https://pypi.org/project/makimoto-kawa/"><img src="https://img.shields.io/pypi/pyversions/makimoto-kawa?cachebust=1" alt="Python Versions"/></a>
+    <a href="https://www.makimoto.ai/"><img src="https://img.shields.io/badge/Website-Makimoto-blue?logo=googlechrome&logoColor=white" alt="Website" /></a>
+    <a href="https://discord.gg/EwVQxPCb5"><img src="https://img.shields.io/discord/1352140878650540062?logo=discord&logoColor=white&label=Discord&color=5865F2" alt="Discord" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-red.svg" alt="MIT license" /></a>
+</p>
+    <!-- 
+    Future Additions: 
+    - # of Contributors
+    - other repo reference websites
+    GitHub APP
+    <a href="https://github.com/apps/ecc-tools"><img src="https://img.shields.io/badge/GitHub%20App-ECC%20Tools-181717?logo=github&logoColor=white" alt="GitHub App" /></a> -->
+    
 
 Official Python SDK for [Kawa](https://github.com/makimoto-ai/kawa)'s transcription API. `makimoto` is the shared namespace this SDK lives under, `kawa` is the specific product it talks to, more Makimoto products may get their own subpackage here later.
 
