@@ -96,6 +96,11 @@ select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
 # Self on Python 3.10, not worth it for one method's return annotation.
 ignore = ["PYI034"]
 
+[tool.pytest.ini_options]
+markers = [
+    "integration: hits a real deployed API (staging), not mocked; skips itself when STAGING_API_URL/STAGING_API_KEY aren't set",
+]
+
 [tool.coverage.run]
 source = ["makimoto"]
 
