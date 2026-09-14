@@ -51,10 +51,11 @@ def test_list_transcriptions_success(httpx2_mock):
             200, json={"transcriptions": [{"job_id": "abc", "status": "succeeded"}]}
         )
     )
-    jobs = make_client().list_transcriptions()
-    assert len(jobs) == 1
-    assert jobs[0].job_id == "abc"
-    assert jobs[0].status == "succeeded"
+    page = make_client().list_transcriptions()
+    assert len(page.transcriptions) == 1
+    assert page.transcriptions[0].job_id == "abc"
+    assert page.transcriptions[0].status == "succeeded"
+    assert page.next_cursor is None
 
 
 def test_list_transcriptions_captures_all_list_only_fields(httpx2_mock):
@@ -77,23 +78,55 @@ def test_list_transcriptions_captures_all_list_only_fields(httpx2_mock):
             },
         )
     )
-    job = make_client().list_transcriptions()[0]
+    job = make_client().list_transcriptions().transcriptions[0]
     assert job.original_filename == "jackhammer.wav"
     assert job.language == "es"
     assert job.created_at == "2026-08-26T02:17:38.908Z"
     assert job.updated_at == "2026-08-26T02:17:40.398Z"
 
 
-def test_list_transcriptions_alternate_response_keys(httpx2_mock):
-    # backend might key the list under "jobs" or "data" instead of "transcriptions"
+def test_list_transcriptions_exposes_next_cursor(httpx2_mock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         return_value=httpx.Response(
-            200, json={"jobs": [{"job_id": "xyz", "status": "queued"}]}
+            200,
+            json={
+                "transcriptions": [{"job_id": "abc", "status": "succeeded"}],
+                "next_cursor": "opaque-cursor-value",
+            },
         )
     )
-    jobs = make_client().list_transcriptions()
-    assert len(jobs) == 1
-    assert jobs[0].job_id == "xyz"
+    page = make_client().list_transcriptions()
+    assert page.next_cursor == "opaque-cursor-value"
+
+
+def test_list_transcriptions_sends_pagination_and_filters(httpx2_mock):
+    route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(200, json={"transcriptions": []})
+    )
+    make_client().list_transcriptions(
+        limit=5,
+        cursor="prev-cursor",
+        status="succeeded",
+        language="en",
+        created_after="2026-01-01T00:00:00Z",
+        job_id="11111111-1111-1111-1111-111111111111",
+    )
+    sent = route.calls.last.request.url.params
+    assert sent["limit"] == "5"
+    assert sent["cursor"] == "prev-cursor"
+    assert sent["status"] == "succeeded"
+    assert sent["language"] == "en"
+    assert sent["created_after"] == "2026-01-01T00:00:00Z"
+    assert sent["job_id"] == "11111111-1111-1111-1111-111111111111"
+
+
+def test_list_transcriptions_omits_unset_params(httpx2_mock):
+    # None-valued args must not become literal "None" query params.
+    route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(200, json={"transcriptions": []})
+    )
+    make_client().list_transcriptions()
+    assert dict(route.calls.last.request.url.params) == {}
 
 
 # -- get_transcription --------------------------------------------------------------- #
@@ -277,8 +310,8 @@ def test_follows_redirects(httpx2_mock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/").mock(
         return_value=httpx.Response(200, json={"transcriptions": []})
     )
-    jobs = make_client().list_transcriptions()
-    assert jobs == []
+    page = make_client().list_transcriptions()
+    assert page.transcriptions == []
 
 
 def test_sends_correct_auth_header(httpx2_mock):
