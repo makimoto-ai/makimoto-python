@@ -186,6 +186,38 @@ class KawaClient:
         body = self._request("GET", "/v1/transcriptions", params=query)
         return self._parse(TranscriptionPage, body)
 
+    def iter_transcriptions(
+        self,
+        *,
+        page_size: int | None = None,
+        status: str | None = None,
+        language: str | None = None,
+        created_after: str | None = None,
+        job_id: str | None = None,
+    ) -> Iterator[Job]:
+        """Yield every matching job, fetching further pages automatically.
+
+        A thin wrapper around `list_transcriptions()` for the common case of
+        wanting all matching jobs rather than one page at a time. `page_size`
+        controls the underlying per-request `limit` (server default 10, capped
+        at 100), not how many jobs this yields overall, use `list_transcriptions`
+        directly if you need explicit control over paging instead.
+        """
+        cursor: str | None = None
+        while True:
+            page = self.list_transcriptions(
+                limit=page_size,
+                cursor=cursor,
+                status=status,
+                language=language,
+                created_after=created_after,
+                job_id=job_id,
+            )
+            yield from page.transcriptions
+            if page.next_cursor is None:
+                return
+            cursor = page.next_cursor
+
     def create_transcription(
         self,
         file_path: str | Path,

@@ -129,6 +129,60 @@ def test_list_transcriptions_omits_unset_params(httpx2_mock):
     assert dict(route.calls.last.request.url.params) == {}
 
 
+# -- iter_transcriptions ------------------------------------------------------------- #
+
+
+def test_iter_transcriptions_walks_every_page(httpx2_mock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "transcriptions": [{"job_id": "a", "status": "succeeded"}],
+                    "next_cursor": "page-2",
+                },
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "transcriptions": [{"job_id": "b", "status": "succeeded"}],
+                    "next_cursor": None,
+                },
+            ),
+        ]
+    )
+    job_ids = [job.job_id for job in make_client().iter_transcriptions()]
+    assert job_ids == ["a", "b"]
+
+
+def test_iter_transcriptions_stops_when_first_page_has_no_cursor(httpx2_mock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(
+            200,
+            json={"transcriptions": [{"job_id": "solo", "status": "succeeded"}]},
+        )
+    )
+    job_ids = [job.job_id for job in make_client().iter_transcriptions()]
+    assert job_ids == ["solo"]
+
+
+def test_iter_transcriptions_reuses_filters_and_page_size_on_every_page(httpx2_mock):
+    route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={"transcriptions": [{"job_id": "a"}], "next_cursor": "page-2"},
+            ),
+            httpx.Response(200, json={"transcriptions": [{"job_id": "b"}]}),
+        ]
+    )
+    list(make_client().iter_transcriptions(page_size=1, status="succeeded"))
+    assert len(route.calls) == 2
+    first, second = (dict(call.request.url.params) for call in route.calls)
+    assert first == {"limit": "1", "status": "succeeded"}
+    assert second == {"limit": "1", "status": "succeeded", "cursor": "page-2"}
+
+
 # -- get_transcription --------------------------------------------------------------- #
 
 
