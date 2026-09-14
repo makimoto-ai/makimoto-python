@@ -56,7 +56,9 @@ def main() -> int:
         print(f"job did not succeed (status: {result.status}), error: {result.error}")
         return 1
 
-    print(f"\nlanguage: {result.result.language}   words: {result.result.words_count}\n")
+    print(
+        f"\nlanguage: {result.result.language}   words: {result.result.words_count}\n"
+    )
     print(result.result.full_text)
     return 0
 
