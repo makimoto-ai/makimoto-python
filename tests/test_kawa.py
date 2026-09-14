@@ -20,12 +20,14 @@ def make_client(**kwargs) -> KawaClient:
 # -- logging: quiet by default, an app that never configures logging shouldn't
 #    see this library's records printed to stderr on its own -------------------- #
 
+
 def test_logger_has_a_null_handler():
     logger = logging.getLogger("makimoto.kawa.client")
     assert any(isinstance(h, logging.NullHandler) for h in logger.handlers)
 
 
-# -- lifecycle: close() / context manager -------------------------------------- #
+# -- lifecycle: close() / context manager -------------------------------------------- #
+
 
 def test_close_closes_the_session():
     client = make_client()
@@ -40,11 +42,14 @@ def test_context_manager_closes_on_exit():
     assert client._session.is_closed is True
 
 
-# -- list_transcriptions ------------------------------------------------------ #
+# -- list_transcriptions ------------------------------------------------------------- #
+
 
 def test_list_transcriptions_success(httpx2_mock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
-        return_value=httpx.Response(200, json={"transcriptions": [{"job_id": "abc", "status": "succeeded"}]})
+        return_value=httpx.Response(
+            200, json={"transcriptions": [{"job_id": "abc", "status": "succeeded"}]}
+        )
     )
     jobs = make_client().list_transcriptions()
     assert len(jobs) == 1
@@ -82,14 +87,17 @@ def test_list_transcriptions_captures_all_list_only_fields(httpx2_mock):
 def test_list_transcriptions_alternate_response_keys(httpx2_mock):
     # backend might key the list under "jobs" or "data" instead of "transcriptions"
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
-        return_value=httpx.Response(200, json={"jobs": [{"job_id": "xyz", "status": "queued"}]})
+        return_value=httpx.Response(
+            200, json={"jobs": [{"job_id": "xyz", "status": "queued"}]}
+        )
     )
     jobs = make_client().list_transcriptions()
     assert len(jobs) == 1
     assert jobs[0].job_id == "xyz"
 
 
-# -- get_transcription --------------------------------------------------------- #
+# -- get_transcription --------------------------------------------------------------- #
+
 
 def test_get_transcription_success(httpx2_mock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
@@ -103,7 +111,13 @@ def test_get_transcription_success(httpx2_mock):
                     "duration_seconds": 12.0,
                     "words_count": 2,
                     "transcript": [
-                        {"text": "hello world", "time_start": 0, "time_end": 1, "speaker_id": 0, "speaker_alias": "A"}
+                        {
+                            "text": "hello world",
+                            "time_start": 0,
+                            "time_end": 1,
+                            "speaker_id": 0,
+                            "speaker_alias": "A",
+                        }
                     ],
                 },
             },
@@ -137,21 +151,25 @@ def test_get_transcription_ignores_unknown_response_fields(httpx2_mock):
     # A future backend field shouldn't break an older SDK version.
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
         return_value=httpx.Response(
-            200, json={"job_id": "abc", "status": "queued", "some_future_field": "ignored"}
+            200,
+            json={"job_id": "abc", "status": "queued", "some_future_field": "ignored"},
         )
     )
     job = make_client().get_transcription("abc")
     assert job.job_id == "abc"
 
 
-# -- create_transcription ------------------------------------------------------- #
+# -- create_transcription ------------------------------------------------------------ #
+
 
 def test_create_transcription_success(httpx2_mock, tmp_path):
     audio_file = tmp_path / "call.mp3"
     audio_file.write_bytes(b"fake audio bytes")
 
     httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
-        return_value=httpx.Response(202, json={"job_id": "new-job", "status": "processing"})
+        return_value=httpx.Response(
+            202, json={"job_id": "new-job", "status": "processing"}
+        )
     )
     job = make_client().create_transcription(audio_file, language="en")
     assert job.job_id == "new-job"
@@ -165,23 +183,33 @@ def test_create_transcription_captures_received_at(httpx2_mock, tmp_path):
     httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
         return_value=httpx.Response(
             202,
-            json={"job_id": "new-job", "status": "processing", "received_at": "2026-06-11T19:13:22.366Z"},
+            json={
+                "job_id": "new-job",
+                "status": "processing",
+                "received_at": "2026-06-11T19:13:22.366Z",
+            },
         )
     )
     job = make_client().create_transcription(audio_file, language="en")
     assert job.received_at == "2026-06-11T19:13:22.366Z"
 
 
-def test_create_transcription_actually_sends_language_and_metadata(httpx2_mock, tmp_path):
+def test_create_transcription_actually_sends_language_and_metadata(
+    httpx2_mock, tmp_path
+):
     # The test above only checks the response is parsed correctly, it never
     # confirms language/metadata were in the outgoing request at all, this does.
     audio_file = tmp_path / "call.mp3"
     audio_file.write_bytes(b"fake audio bytes")
 
     route = httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
-        return_value=httpx.Response(202, json={"job_id": "new-job", "status": "processing"})
+        return_value=httpx.Response(
+            202, json={"job_id": "new-job", "status": "processing"}
+        )
     )
-    make_client().create_transcription(audio_file, language="en", metadata={"source": "test"})
+    make_client().create_transcription(
+        audio_file, language="en", metadata={"source": "test"}
+    )
 
     sent = route.calls.last.request.content.decode()
     assert 'name="language"' in sent
@@ -190,20 +218,29 @@ def test_create_transcription_actually_sends_language_and_metadata(httpx2_mock, 
     assert '{"source":"test"}' in sent
 
 
-# -- delete_transcription -------------------------------------------------------- #
+# -- delete_transcription ------------------------------------------------------------ #
+
 
 def test_delete_transcription_success(httpx2_mock):
-    httpx2_mock.delete(f"{BASE_URL}/v1/transcriptions/abc").mock(return_value=httpx.Response(202, json={}))
+    httpx2_mock.delete(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=httpx.Response(202, json={})
+    )
     result = make_client().delete_transcription("abc")
     assert result == {}
 
 
-# -- usage ------------------------------------------------------------------------- #
+# -- usage --------------------------------------------------------------------------- #
+
 
 def test_usage_success(httpx2_mock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/usage").mock(
         return_value=httpx.Response(
-            200, json={"limit_minutes": 1000, "used_minutes": 12.5, "remaining_minutes": 987.5}
+            200,
+            json={
+                "limit_minutes": 1000,
+                "used_minutes": 12.5,
+                "remaining_minutes": 987.5,
+            },
         )
     )
     usage = make_client().usage()
@@ -214,9 +251,12 @@ def test_usage_success(httpx2_mock):
 
 # -- error handling ------------------------------------------------------------------ #
 
+
 def test_error_response_raises_kawa_error(httpx2_mock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/missing").mock(
-        return_value=httpx.Response(404, json={"error": {"code": "JOB_NOT_FOUND", "message": "Job not found"}})
+        return_value=httpx.Response(
+            404, json={"error": {"code": "JOB_NOT_FOUND", "message": "Job not found"}}
+        )
     )
     with pytest.raises(KawaError) as exc_info:
         make_client().get_transcription("missing")
@@ -226,7 +266,9 @@ def test_error_response_raises_kawa_error(httpx2_mock):
 
 def test_non_json_error_body_does_not_crash(httpx2_mock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/broken").mock(
-        return_value=httpx.Response(500, content=b"<html>not json</html>", headers={"content-type": "text/html"})
+        return_value=httpx.Response(
+            500, content=b"<html>not json</html>", headers={"content-type": "text/html"}
+        )
     )
     with pytest.raises(KawaError) as exc_info:
         make_client().get_transcription("broken")
@@ -234,20 +276,27 @@ def test_non_json_error_body_does_not_crash(httpx2_mock):
 
 
 def test_connection_error_raises_httpx2_connect_error(httpx2_mock):
-    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(side_effect=httpx2.ConnectError("boom"))
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
+        side_effect=httpx2.ConnectError("boom")
+    )
     with pytest.raises(httpx2.ConnectError):
         make_client().list_transcriptions()
 
 
-# -- transport behaviour (httpx2-specific) --------------------------------------------- #
+# -- transport behaviour (httpx2-specific) ------------------------------------------- #
+
 
 def test_follows_redirects(httpx2_mock):
     # httpx2.Client defaults to follow_redirects=False; requests.Session followed by
     # default, this must be set explicitly to keep parity.
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
-        return_value=httpx.Response(302, headers={"location": f"{BASE_URL}/v1/transcriptions/"})
+        return_value=httpx.Response(
+            302, headers={"location": f"{BASE_URL}/v1/transcriptions/"}
+        )
     )
-    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/").mock(return_value=httpx.Response(200, json={"transcriptions": []}))
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/").mock(
+        return_value=httpx.Response(200, json={"transcriptions": []})
+    )
     jobs = make_client().list_transcriptions()
     assert jobs == []
 
@@ -268,7 +317,8 @@ def test_headers_raises_when_token_empty(monkeypatch):
         make_client(token="").list_transcriptions()
 
 
-# -- poll ------------------------------------------------------------------------------ #
+# -- poll ---------------------------------------------------------------------------- #
+
 
 def test_poll_stops_on_terminal_status(httpx2_mock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
@@ -313,7 +363,8 @@ def test_poll_logs_nothing_when_it_succeeds(httpx2_mock, caplog):
     assert len(caplog.records) == 0
 
 
-# -- logging: credential source, never the value itself --------------------------------- #
+# -- logging: credential source, never the value itself ------------------------------ #
+
 
 def test_logs_debug_when_falling_back_to_env_var(monkeypatch, caplog):
     monkeypatch.setenv("MAKIMOTO_API_TOKEN", "super-secret-value")
@@ -331,7 +382,8 @@ def test_logs_nothing_credential_related_when_token_given_explicitly(caplog):
     assert not any("MAKIMOTO_API_TOKEN" in r.message for r in caplog.records)
 
 
-# -- transcribe ------------------------------------------------------------------------- #
+# -- transcribe ---------------------------------------------------------------------- #
+
 
 def test_transcribe_returns_result_on_success(httpx2_mock, tmp_path):
     audio_file = tmp_path / "call.mp3"
@@ -350,7 +402,13 @@ def test_transcribe_returns_result_on_success(httpx2_mock, tmp_path):
                     "duration_seconds": 1.0,
                     "words_count": 2,
                     "transcript": [
-                        {"text": "hi there", "time_start": 0, "time_end": 1, "speaker_id": 0, "speaker_alias": "A"}
+                        {
+                            "text": "hi there",
+                            "time_start": 0,
+                            "time_end": 1,
+                            "speaker_id": 0,
+                            "speaker_alias": "A",
+                        }
                     ],
                 },
             },
@@ -358,6 +416,7 @@ def test_transcribe_returns_result_on_success(httpx2_mock, tmp_path):
     )
     result = make_client().transcribe(audio_file, interval=0)
     assert result.status == "succeeded"
+    assert result.result is not None
     assert result.result.full_text == "hi there"
 
 
@@ -383,15 +442,22 @@ def test_transcribe_returns_failed_job_without_raising(httpx2_mock, tmp_path):
     )
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
         return_value=httpx.Response(
-            200, json={"job_id": "abc", "status": "failed", "error": {"code": "bad_audio", "message": "nope"}}
+            200,
+            json={
+                "job_id": "abc",
+                "status": "failed",
+                "error": {"code": "bad_audio", "message": "nope"},
+            },
         )
     )
     result = make_client().transcribe(audio_file, interval=0)
     assert result.status == "failed"
+    assert result.error is not None
     assert result.error.code == "bad_audio"
 
 
-# -- credentials: explicit token / env var fallback --------------------------------------- #
+# -- credentials: explicit token / env var fallback ---------------------------------- #
+
 
 def test_explicit_token_beats_env_var(monkeypatch, httpx2_mock):
     monkeypatch.setenv("MAKIMOTO_API_TOKEN", "env-token")

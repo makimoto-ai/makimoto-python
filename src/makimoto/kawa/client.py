@@ -22,8 +22,8 @@ DEFAULT_API_URL = "https://api.makimoto.ai"
 # for SDK-level events httpx2 can't see: credential source, giving up on a
 # poll. Never logs the token/credential value itself.
 #
-# NullHandler prevents Python's default handler from printing WARNING+ 
-# records to stderr when consumers haven't configured logging. 
+# NullHandler prevents Python's default handler from printing WARNING+
+# records to stderr when consumers haven't configured logging.
 # Libraries emit; applications configure handlers.
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -85,7 +85,7 @@ class KawaClient:
         """
         self._session.close()
 
-    def __enter__(self) -> "KawaClient":
+    def __enter__(self) -> KawaClient:
         return self
 
     def __exit__(self, *exc_info: object) -> None:
@@ -124,7 +124,10 @@ class KawaClient:
             body = {"raw": response.text}
         if response.status_code >= 400:
             raise KawaError(
-                response.status_code, body, self.last_url, headers=dict(response.headers)
+                response.status_code,
+                body,
+                self.last_url,
+                headers=dict(response.headers),
             )
         return body
 
@@ -192,7 +195,9 @@ class KawaClient:
         # _request() is genuinely Any (a response body could be any JSON
         # shape); DELETE's contract is known to be a dict, so cast rather
         # than widen this method's own, more useful, return type.
-        return cast(dict[str, Any], self._request("DELETE", f"/v1/transcriptions/{job_id}"))
+        return cast(
+            dict[str, Any], self._request("DELETE", f"/v1/transcriptions/{job_id}")
+        )
 
     def usage(self) -> Usage:
         """GET /v1/transcriptions/usage - the caller's transcription minute quota.
@@ -228,8 +233,9 @@ class KawaClient:
         if max_attempts > 0:
             logger.warning(
                 "poll() gave up on job %s after %d attempts, still %s, "
-                "no exception was raised, check the last yielded Job's .is_terminal yourself "
-                "(or use transcribe() instead, which raises TimeoutError for this case)",
+                "no exception was raised, check the last yielded Job's "
+                ".is_terminal yourself (or use transcribe() instead, which "
+                "raises TimeoutError for this case)",
                 job_id,
                 max_attempts,
                 last_status,
@@ -253,8 +259,12 @@ class KawaClient:
         """
         job = self.create_transcription(file_path, language=language, metadata=metadata)
         final = job
-        for update in self.poll(job.job_id, interval=interval, max_attempts=max_attempts):
+        for update in self.poll(
+            job.job_id, interval=interval, max_attempts=max_attempts
+        ):
             final = update
         if not final.is_terminal:
-            raise TimeoutError(f"Job {job.job_id} still processing after {max_attempts} checks")
+            raise TimeoutError(
+                f"Job {job.job_id} still processing after {max_attempts} checks"
+            )
         return final

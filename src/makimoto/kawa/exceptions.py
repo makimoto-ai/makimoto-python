@@ -12,7 +12,13 @@ class KawaError(RuntimeError):
     header that reveals whether a 413 came from the API or a proxy in front of it).
     """
 
-    def __init__(self, status_code: int, body: Any, url: str, headers: dict[str, str] | None = None):
+    def __init__(
+        self,
+        status_code: int,
+        body: Any,
+        url: str,
+        headers: dict[str, str] | None = None,
+    ):
         self.status_code = status_code
         self.body = body
         self.url = url
@@ -31,7 +37,7 @@ class KawaValidationError(KawaError):
     """Raised when a successful response doesn't match the expected shape.
 
     A subclass of ``KawaError``, so ``except KawaError`` catches
-    this too. 
+    this too.
     """
 
     def __init__(
@@ -47,4 +53,7 @@ class KawaValidationError(KawaError):
         self.body = body
         self.url = url
         self.headers = dict(headers or {})
-        RuntimeError.__init__(self, f"Response from {url} did not match the expected shape: {validation_error}")
+        RuntimeError.__init__(
+            self,
+            f"Response from {url} did not match the expected shape: {validation_error}",
+        )

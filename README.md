@@ -59,7 +59,7 @@ An explicit `token` argument always wins over the environment variable if both a
 ```python
 from makimoto import kawa
 
-client = kawa.KawaClient(token="<dashboard-token>")   # or set MAKIMOTO_API_TOKEN instead
+client = kawa.KawaClient(token="<dashboard-token>")  # or set MAKIMOTO_API_TOKEN instead
 
 job = client.transcribe("call.mp3", language="en")
 
@@ -111,9 +111,12 @@ Quiet by default. To see what the SDK is doing (credential source, a poll that g
 
 ```python
 import logging
+
 logging.basicConfig()  # attaches a handler so the lines below actually print somewhere
-logging.getLogger("makimoto.kawa.client").setLevel(logging.DEBUG)  # this SDK's own events
-logging.getLogger("httpx2").setLevel(logging.DEBUG)                 # every request/response
+logging.getLogger("makimoto.kawa.client").setLevel(
+    logging.DEBUG
+)  # this SDK's own events
+logging.getLogger("httpx2").setLevel(logging.DEBUG)  # every request/response
 ```
 
 ## Development

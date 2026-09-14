@@ -6,19 +6,21 @@
 git clone https://github.com/makimoto-ai/makimoto-python
 cd makimoto-python
 pip install -e ".[dev]"
-pre-commit install --hook-type commit-msg
+pre-commit install --hook-type commit-msg --hook-type pre-commit
 ```
 
-The `pre-commit` step enforces the commit message format below locally, before you push.
+The `pre-commit` hooks enforce the commit message format below and run `ruff` locally, before you push.
 
 ## Running checks
 
 ```bash
-pytest
-mypy src/makimoto --strict
+ruff check .
+ruff format --check .
+pyrefly check
+pytest --cov=makimoto --cov-report=term-missing
 ```
 
-Both also run in CI across Python 3.10, 3.11, and 3.12 on every pull request.
+All of these also run in CI across Python 3.10, 3.11, and 3.12 on every pull request.
 
 ## Commit messages
 
@@ -28,4 +30,10 @@ This drives automated versioning: `feat` bumps the minor version, `fix` bumps th
 
 ## Pull requests
 
-Branch off `main`, open a PR against it. CI (tests + type check) and commit-lint both run automatically and must pass before merging.
+Branch off `main`, open a PR against it. CI (lint, format, type check, tests) and commit-lint both run automatically and must pass before merging.
+
+## Releasing
+
+Releases are PR-based, nothing ever pushes straight to `main`. On every push to `main`, `.github/workflows/release.yml` computes the next version from Conventional Commits and, if one is due, opens or updates a `chore/release` PR with the version bump and `CHANGELOG.md` entry. Merging that PR (through the same review and CI as any other PR) triggers a second job that tags the commit and creates the GitHub release, which in turn publishes to TestPyPI automatically. Publishing to the real PyPI stays a separate, manual step (`publish.yml`, `workflow_dispatch` only).
+
+This depends on a repo secret, `RELEASE_PR_TOKEN`: a PAT (fine-grained, scoped to this repo, `contents: write` + `pull requests: write`) from an account with write access. This is required, not optional: GitHub refuses to let a PR opened with the default `GITHUB_TOKEN` trigger other workflows, so without this token the release PR's own required CI checks would never run and it could never be merged. Create it under the token-owning account's Settings → Developer settings → Fine-grained tokens, then add it as `RELEASE_PR_TOKEN` under this repo's Settings → Secrets and variables → Actions.
