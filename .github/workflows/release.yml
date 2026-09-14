@@ -57,8 +57,13 @@ jobs:
           --no-commit --no-tag --no-push --no-vcs-release
       - name: Check whether a release is actually due
         id: diff
+        # Against HEAD, not a bare `git diff`: semantic-release version
+        # --no-commit still stages the file writes (git add), it only skips
+        # the actual commit, so a plain `git diff` (working tree vs the
+        # index) sees no difference even when a real bump is due. Confirmed
+        # by reproducing this exact step locally, not guessed.
         run: |
-          if git diff --quiet -- pyproject.toml CHANGELOG.md; then
+          if git diff --quiet HEAD -- pyproject.toml CHANGELOG.md; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
