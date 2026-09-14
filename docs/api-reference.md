@@ -37,11 +37,6 @@
       show_root_heading: true
       heading_level: 3
 
-::: makimoto.kawa.Usage
-    options:
-      show_root_heading: true
-      heading_level: 3
-
 ## Exceptions
 
 ::: makimoto.kawa.KawaError

@@ -60,14 +60,6 @@ class JobError(BaseModel):
     provider_error: dict[str, Any] | None = None
 
 
-class Usage(BaseModel):
-    """The caller's transcription minute quota, as returned by `KawaClient.usage()`."""
-
-    limit_minutes: float
-    used_minutes: float
-    remaining_minutes: float
-
-
 class Job(BaseModel):
     """A transcription job, in whatever state the API last reported.
 

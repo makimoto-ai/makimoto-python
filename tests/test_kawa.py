@@ -12,7 +12,7 @@ BASE_URL = "https://api.makimoto.ai"
 
 
 def make_client(**kwargs) -> KawaClient:
-    kwargs.setdefault("token", "test-token")
+    kwargs.setdefault("api_key", "test-key")
     kwargs.setdefault("api_url", BASE_URL)
     return KawaClient(**kwargs)
 
@@ -229,26 +229,6 @@ def test_delete_transcription_success(httpx2_mock):
     assert result == {}
 
 
-# -- usage --------------------------------------------------------------------------- #
-
-
-def test_usage_success(httpx2_mock):
-    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/usage").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "limit_minutes": 1000,
-                "used_minutes": 12.5,
-                "remaining_minutes": 987.5,
-            },
-        )
-    )
-    usage = make_client().usage()
-    assert usage.limit_minutes == 1000
-    assert usage.used_minutes == 12.5
-    assert usage.remaining_minutes == 987.5
-
-
 # -- error handling ------------------------------------------------------------------ #
 
 
@@ -305,16 +285,16 @@ def test_sends_correct_auth_header(httpx2_mock):
     route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         return_value=httpx.Response(200, json={"transcriptions": []})
     )
-    make_client(token="secret-token").list_transcriptions()
-    assert route.calls.last.request.headers["authorization"] == "Bearer secret-token"
+    make_client(api_key="secret-key").list_transcriptions()
+    assert route.calls.last.request.headers["authorization"] == "Bearer secret-key"
 
 
-def test_headers_raises_when_token_empty(monkeypatch):
+def test_headers_raises_when_api_key_empty(monkeypatch):
     # An explicit empty string must raise, not silently fall back to
-    # whatever MAKIMOTO_API_TOKEN happens to be set to on the host.
-    monkeypatch.delenv("MAKIMOTO_API_TOKEN", raising=False)
+    # whatever MAKIMOTO_API_KEY happens to be set to on the host.
+    monkeypatch.delenv("MAKIMOTO_API_KEY", raising=False)
     with pytest.raises(ValueError):
-        make_client(token="").list_transcriptions()
+        make_client(api_key="").list_transcriptions()
 
 
 # -- poll ---------------------------------------------------------------------------- #
@@ -367,19 +347,19 @@ def test_poll_logs_nothing_when_it_succeeds(httpx2_mock, caplog):
 
 
 def test_logs_debug_when_falling_back_to_env_var(monkeypatch, caplog):
-    monkeypatch.setenv("MAKIMOTO_API_TOKEN", "super-secret-value")
+    monkeypatch.setenv("MAKIMOTO_API_KEY", "super-secret-value")
     with caplog.at_level(logging.DEBUG, logger="makimoto.kawa.client"):
         KawaClient(api_url=BASE_URL)
-    assert any("MAKIMOTO_API_TOKEN" in r.message for r in caplog.records)
+    assert any("MAKIMOTO_API_KEY" in r.message for r in caplog.records)
     # The actual credential must never appear in a log record, only the fact
     # that the fallback happened.
     assert not any("super-secret-value" in r.message for r in caplog.records)
 
 
-def test_logs_nothing_credential_related_when_token_given_explicitly(caplog):
+def test_logs_nothing_credential_related_when_api_key_given_explicitly(caplog):
     with caplog.at_level(logging.DEBUG, logger="makimoto.kawa.client"):
-        KawaClient(token="explicit-token", api_url=BASE_URL)
-    assert not any("MAKIMOTO_API_TOKEN" in r.message for r in caplog.records)
+        KawaClient(api_key="explicit-key", api_url=BASE_URL)
+    assert not any("MAKIMOTO_API_KEY" in r.message for r in caplog.records)
 
 
 # -- transcribe ---------------------------------------------------------------------- #
@@ -456,29 +436,29 @@ def test_transcribe_returns_failed_job_without_raising(httpx2_mock, tmp_path):
     assert result.error.code == "bad_audio"
 
 
-# -- credentials: explicit token / env var fallback ---------------------------------- #
+# -- credentials: explicit api_key / env var fallback -------------------------------- #
 
 
-def test_explicit_token_beats_env_var(monkeypatch, httpx2_mock):
-    monkeypatch.setenv("MAKIMOTO_API_TOKEN", "env-token")
+def test_explicit_api_key_beats_env_var(monkeypatch, httpx2_mock):
+    monkeypatch.setenv("MAKIMOTO_API_KEY", "env-key")
     route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         return_value=httpx.Response(200, json={"transcriptions": []})
     )
-    KawaClient(token="explicit-token", api_url=BASE_URL).list_transcriptions()
-    assert route.calls.last.request.headers["authorization"] == "Bearer explicit-token"
+    KawaClient(api_key="explicit-key", api_url=BASE_URL).list_transcriptions()
+    assert route.calls.last.request.headers["authorization"] == "Bearer explicit-key"
 
 
 def test_falls_back_to_env_var(monkeypatch, httpx2_mock):
-    monkeypatch.setenv("MAKIMOTO_API_TOKEN", "env-token")
+    monkeypatch.setenv("MAKIMOTO_API_KEY", "env-key")
     route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         return_value=httpx.Response(200, json={"transcriptions": []})
     )
     KawaClient(api_url=BASE_URL).list_transcriptions()
-    assert route.calls.last.request.headers["authorization"] == "Bearer env-token"
+    assert route.calls.last.request.headers["authorization"] == "Bearer env-key"
 
 
 def test_raises_when_no_credential_available(monkeypatch):
-    monkeypatch.delenv("MAKIMOTO_API_TOKEN", raising=False)
+    monkeypatch.delenv("MAKIMOTO_API_KEY", raising=False)
     client = KawaClient(api_url=BASE_URL)
     with pytest.raises(ValueError):
         client.list_transcriptions()

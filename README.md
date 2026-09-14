@@ -38,28 +38,26 @@ pip install makimoto-kawa
 
 ## Authentication
 
-Get a token from the Makimoto dashboard: <https://www.makimoto.ai/login>.
-
-For now, this is a short-lived JWT, not a persistent API key, it expires, so copy a fresh one from the dashboard if requests start failing with `401`. This will change to a static API key in the near future; when it does, the same `token`/`MAKIMOTO_API_TOKEN` mechanism below will keep working, only what you paste in changes.
+Create an API key from the Makimoto dashboard: <https://www.makimoto.ai/login>. This is a static key, not the short-lived JWT your browser session uses, it doesn't expire on its own, and it's the only credential this SDK accepts, the transcription endpoints reject a dashboard login JWT outright.
 
 ```python
-client = kawa.KawaClient(token="<dashboard-token>")
+client = kawa.KawaClient(api_key="<your api key>")
 ```
 
 or set it once as an environment variable and omit the argument entirely:
 
 ```bash
-export MAKIMOTO_API_TOKEN="<dashboard-token>"
+export MAKIMOTO_API_KEY="<your api key>"
 ```
 
-An explicit `token` argument always wins over the environment variable if both are set.
+An explicit `api_key` argument always wins over the environment variable if both are set.
 
 ## Usage
 
 ```python
 from makimoto import kawa
 
-client = kawa.KawaClient(token="<dashboard-token>")  # or set MAKIMOTO_API_TOKEN instead
+client = kawa.KawaClient(api_key="<your api key>")  # or set MAKIMOTO_API_KEY instead
 
 job = client.transcribe("call.mp3", language="en")
 
@@ -69,7 +67,7 @@ else:
     print(job.error)
 ```
 
-See [`examples/quickstart.py`](https://github.com/makimoto-ai/makimoto-python/blob/main/examples/quickstart.py) for a complete, runnable script, it ships with a small sample audio file, so `python examples/quickstart.py` works out of the box once `MAKIMOTO_API_TOKEN` is set.
+See [`examples/quickstart.py`](https://github.com/makimoto-ai/makimoto-python/blob/main/examples/quickstart.py) for a complete, runnable script, it ships with a small sample audio file, so `python examples/quickstart.py` works out of the box once `MAKIMOTO_API_KEY` is set.
 
 `transcribe()` submits the recording and polls until it's done in one call, raising `TimeoutError` if it never finishes. For manual control, e.g. streaming live status updates to a UI, the lower-level primitives are still there:
 
@@ -80,17 +78,10 @@ for update in client.poll(job.job_id):
     print(update.status)
 ```
 
-Check your account's transcription quota:
-
-```python
-usage = client.usage()
-print(f"{usage.used_minutes}/{usage.limit_minutes} minutes used")
-```
-
 Release the client's connections when you're done with it, or use it as a context manager:
 
 ```python
-with kawa.KawaClient(token="<dashboard-token>") as client:
+with kawa.KawaClient(api_key="<your api key>") as client:
     ...
 ```
 

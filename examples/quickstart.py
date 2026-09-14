@@ -1,7 +1,7 @@
 """Runnable demo of the makimoto SDK against the real production API.
 
-    export MAKIMOTO_API_TOKEN="<your real token>"      # bash
-    $env:MAKIMOTO_API_TOKEN = "<your real token>"       # PowerShell
+    export MAKIMOTO_API_KEY="<your real api key>"      # bash
+    $env:MAKIMOTO_API_KEY = "<your real api key>"       # PowerShell
     python examples/quickstart.py                       # uses the bundled
                                                           # sample audio
     python examples/quickstart.py path/to/your/audio.wav # or your own file
@@ -29,9 +29,9 @@ if os.getenv("MAKIMOTO_DEBUG"):
 
 
 def main() -> int:
-    token = os.getenv("MAKIMOTO_API_TOKEN", "").strip()
-    if not token:
-        print("Set MAKIMOTO_API_TOKEN first.")
+    api_key = os.getenv("MAKIMOTO_API_KEY", "").strip()
+    if not api_key:
+        print("Set MAKIMOTO_API_KEY first.")
         return 1
 
     audio = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_AUDIO
@@ -39,7 +39,7 @@ def main() -> int:
     # `with` closes the client's connections on the way out, same as calling
     # client.close() explicitly, matters more for a long-running app than a
     # short script like this, but this is also the intended usage pattern.
-    with KawaClient(token=token, api_url="https://api.makimoto.ai") as client:
+    with KawaClient(api_key=api_key, api_url="https://api.makimoto.ai") as client:
         # One call: submits, polls internally, raises on timeout.
         try:
             result = client.transcribe(audio, language="en")
