@@ -13,14 +13,14 @@ import httpx2
 from pydantic import BaseModel, ValidationError
 
 from .exceptions import KawaError, KawaValidationError
-from .models import Job, Usage
+from .models import Job
 
 DEFAULT_API_URL = "https://api.makimoto.ai"
 
 # Raw request/response logging already comes from httpx2's own "httpx2"
 # logger (enable it directly if that's all you need). This logger is only
 # for SDK-level events httpx2 can't see: credential source, giving up on a
-# poll. Never logs the token/credential value itself.
+# poll. Never logs the credential value itself.
 #
 # NullHandler prevents Python's default handler from printing WARNING+
 # records to stderr when consumers haven't configured logging.
@@ -34,11 +34,13 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 class KawaClient:
     """Minimal client for the Makimoto Kawa transcription API.
 
-    Credentials: pass ``token`` explicitly, or omit it and set the
-    ``MAKIMOTO_API_TOKEN`` environment variable instead, the explicit
+    Credentials: pass ``api_key`` explicitly, or omit it and set the
+    ``MAKIMOTO_API_KEY`` environment variable instead, the explicit
     argument always wins if both are present. Neither being set doesn't
     raise here, only lazily, the first time a method actually sends a
-    request.
+    request. This is a static API key (create one from the dashboard),
+    not the short-lived dashboard login JWT, the transcription endpoints
+    this client calls no longer accept that.
 
     Transport: uses ``httpx2.Client`` internally, one instance per
     ``KawaClient``, reused across calls, with ``follow_redirects=True`` set
@@ -47,26 +49,26 @@ class KawaClient:
 
     Example
     -------
-    >>> client = KawaClient(token="<dashboard-token>")
+    >>> client = KawaClient(api_key="<your api key>")
     >>> job = client.transcribe("call.mp3", language="en")
     >>> print(job.result.full_text)
     """
 
     def __init__(
         self,
-        token: str | None = None,
+        api_key: str | None = None,
         api_url: str = DEFAULT_API_URL,
         *,
         timeout: float = 30.0,
         session: httpx2.Client | None = None,
     ):
-        if token is None:
-            token = os.environ.get("MAKIMOTO_API_TOKEN", "")
+        if api_key is None:
+            api_key = os.environ.get("MAKIMOTO_API_KEY", "")
             logger.debug(
-                "no token argument given, using MAKIMOTO_API_TOKEN (%s)",
-                "found" if token else "not set",
+                "no api_key argument given, using MAKIMOTO_API_KEY (%s)",
+                "found" if api_key else "not set",
             )
-        self.token = token.strip()
+        self.api_key = api_key.strip()
         self.api_url = (api_url or DEFAULT_API_URL).rstrip("/")
         self.timeout = timeout
         self._session = session or httpx2.Client(follow_redirects=True)
@@ -98,10 +100,10 @@ class KawaClient:
         return f"{self.api_url}{path}"
 
     def _headers(self) -> dict[str, str]:
-        """Build the Authorization header; raises if there's no token."""
-        if not self.token:
-            raise ValueError("A Makimoto API token is required.")
-        return {"Authorization": f"Bearer {self.token}"}
+        """Build the Authorization header; raises if there's no API key."""
+        if not self.api_key:
+            raise ValueError("A Makimoto API key is required.")
+        return {"Authorization": f"Bearer {self.api_key}"}
 
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         """The one place every HTTP call goes through.
@@ -198,13 +200,6 @@ class KawaClient:
         return cast(
             dict[str, Any], self._request("DELETE", f"/v1/transcriptions/{job_id}")
         )
-
-    def usage(self) -> Usage:
-        """GET /v1/transcriptions/usage - the caller's transcription minute quota.
-
-        Returns ``limit_minutes``/``used_minutes``/``remaining_minutes``.
-        """
-        return self._parse(Usage, self._request("GET", "/v1/transcriptions/usage"))
 
     def poll(
         self,

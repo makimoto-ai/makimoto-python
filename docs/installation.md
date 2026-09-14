@@ -10,22 +10,20 @@ pip install makimoto-kawa
 
 ## Authentication
 
-Get a token from the Makimoto dashboard: <https://www.makimoto.ai/login>.
-
-For now, this is a short-lived JWT, not a persistent API key: it expires, so copy a fresh one from the dashboard if requests start failing with `401`. This will change to a static API key in the near future; when it does, the same `token`/`MAKIMOTO_API_TOKEN` mechanism below will keep working, only what you paste in changes.
+Create an API key from the Makimoto dashboard: <https://www.makimoto.ai/login>. This is a static key, not the short-lived JWT your browser session uses, it doesn't expire on its own, and it's the only credential this SDK accepts.
 
 For more information, see the [Authentication](https://makimoto-ai.github.io/kawa/service/authentication/) page in the main documentation.
 
-Pass the token directly:
+Pass the API key directly:
 
 ```python
-client = kawa.KawaClient(token="<dashboard-token>")
+client = kawa.KawaClient(api_key="<your api key>")
 ```
 
 or set it once as an environment variable and omit the argument entirely:
 
 ```bash
-export MAKIMOTO_API_TOKEN="<dashboard-token>"
+export MAKIMOTO_API_KEY="<your api key>"
 ```
 
-An explicit `token` argument always wins over the environment variable if both are set.
+An explicit `api_key` argument always wins over the environment variable if both are set.

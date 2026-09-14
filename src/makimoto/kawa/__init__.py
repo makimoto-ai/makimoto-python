@@ -8,14 +8,14 @@ submit a recording, poll until done, read the transcript.
     GET    /v1/transcriptions/{job_id}   -> job status + transcript when succeeded
     DELETE /v1/transcriptions/{job_id}   -> remove a job (where supported)
 
-Authenticate every request with a dashboard token:
+Authenticate every request with an API key (create one from the dashboard):
 
-    Authorization: Bearer <makimoto_api_token>
+    Authorization: Bearer <makimoto_api_key>
 
 Example
 -------
 >>> from makimoto.kawa import KawaClient
->>> client = KawaClient(token="<dashboard-token>")
+>>> client = KawaClient(api_key="<your api key>")
 >>> job = client.transcribe("call.mp3", language="en")
 >>> if job.status == "succeeded":
 ...     print(job.result.full_text)
@@ -23,7 +23,7 @@ Example
 
 from .client import DEFAULT_API_URL, KawaClient
 from .exceptions import KawaError, KawaValidationError
-from .models import TERMINAL_STATUSES, Job, JobError, Segment, TranscriptResult, Usage
+from .models import TERMINAL_STATUSES, Job, JobError, Segment, TranscriptResult
 
 __all__ = [
     "DEFAULT_API_URL",
@@ -35,5 +35,4 @@ __all__ = [
     "KawaValidationError",
     "Segment",
     "TranscriptResult",
-    "Usage",
 ]
