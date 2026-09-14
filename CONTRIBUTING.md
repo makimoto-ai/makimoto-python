@@ -6,19 +6,21 @@
 git clone https://github.com/makimoto-ai/makimoto-python
 cd makimoto-python
 pip install -e ".[dev]"
-pre-commit install --hook-type commit-msg
+pre-commit install --hook-type commit-msg --hook-type pre-commit
 ```
 
-The `pre-commit` step enforces the commit message format below locally, before you push.
+The `pre-commit` hooks enforce the commit message format below and run `ruff` locally, before you push.
 
 ## Running checks
 
 ```bash
-pytest
-mypy src/makimoto --strict
+ruff check .
+ruff format --check .
+pyrefly check
+pytest --cov=makimoto --cov-report=term-missing
 ```
 
-Both also run in CI across Python 3.10, 3.11, and 3.12 on every pull request.
+All of these also run in CI across Python 3.10, 3.11, and 3.12 on every pull request.
 
 ## Commit messages
 
@@ -28,4 +30,4 @@ This drives automated versioning: `feat` bumps the minor version, `fix` bumps th
 
 ## Pull requests
 
-Branch off `main`, open a PR against it. CI (tests + type check) and commit-lint both run automatically and must pass before merging.
+Branch off `main`, open a PR against it. CI (lint, format, type check, tests) and commit-lint both run automatically and must pass before merging.

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
 
 jobs:
@@ -17,8 +17,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
-      - run: mypy src/makimoto --strict
-      - run: pytest
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pyrefly check
+      - run: pytest --cov=makimoto --cov-report=term-missing
 
   commit-lint:
     # Re-checks commit messages server-side, a local hook alone can be
