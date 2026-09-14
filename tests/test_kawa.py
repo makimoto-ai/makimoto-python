@@ -71,6 +71,7 @@ def test_list_transcriptions_captures_all_list_only_fields(httpx2_mock):
                         "status": "succeeded",
                         "original_filename": "jackhammer.wav",
                         "language": "es",
+                        "audio_seconds": 12.5,
                         "created_at": "2026-08-26T02:17:38.908Z",
                         "updated_at": "2026-08-26T02:17:40.398Z",
                     }
@@ -81,6 +82,7 @@ def test_list_transcriptions_captures_all_list_only_fields(httpx2_mock):
     job = make_client().list_transcriptions().transcriptions[0]
     assert job.original_filename == "jackhammer.wav"
     assert job.language == "es"
+    assert job.audio_seconds == 12.5
     assert job.created_at == "2026-08-26T02:17:38.908Z"
     assert job.updated_at == "2026-08-26T02:17:40.398Z"
 
@@ -193,6 +195,7 @@ def test_get_transcription_success(httpx2_mock):
             json={
                 "job_id": "abc",
                 "status": "succeeded",
+                "type": "transcription",
                 "result": {
                     "language": "en",
                     "duration_seconds": 12.0,
@@ -212,6 +215,7 @@ def test_get_transcription_success(httpx2_mock):
     )
     job = make_client().get_transcription("abc")
     assert job.is_terminal
+    assert job.type == "transcription"
     assert job.result is not None
     assert job.result.full_text == "hello world"
 

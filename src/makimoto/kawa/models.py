@@ -66,11 +66,16 @@ class Job(BaseModel):
     ``result`` is only present once ``succeeded``; ``error`` only once
     ``failed``. The fields below aren't all present on every response, each
     is only sent by specific endpoints: ``received_at`` only on the response
-    to ``create_transcription()``; ``original_filename``, ``language``,
-    ``created_at`` and ``updated_at`` only on ``list_transcriptions()``
-    entries. ``language`` here is the list view's own top-level field
-    (whatever was requested at submission), distinct from the detected
-    language on ``result.language``, which only exists once a job succeeds.
+    to ``create_transcription()``; ``original_filename``, ``language`` and
+    ``audio_seconds`` only on ``list_transcriptions()``/``iter_transcriptions()``
+    entries; ``created_at`` and ``updated_at`` on those too, plus ``type`` on
+    ``get_transcription()``. ``language`` here is the list view's own
+    top-level field (whatever was requested at submission), distinct from
+    the detected language on ``result.language``, which only exists once a
+    job succeeds. ``type`` is always ``"transcription"`` for anything this
+    client creates; the other values (``"summary"``, ``"tags"``) belong to
+    endpoints this SDK doesn't support yet, kept as a plain string rather
+    than an enum so an unrecognised value doesn't fail to parse.
     """
 
     job_id: str
@@ -80,8 +85,10 @@ class Job(BaseModel):
     received_at: str | None = None
     original_filename: str | None = None
     language: str | None = None
+    audio_seconds: float | None = None
     created_at: str | None = None
     updated_at: str | None = None
+    type: str | None = None
 
     @model_validator(mode="before")
     @classmethod
