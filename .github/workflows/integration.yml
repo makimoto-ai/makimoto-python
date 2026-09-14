@@ -1,0 +1,25 @@
+name: Integration
+
+# Hits the real staging API (tests/integration/test_staging.py), deliberately
+# not run on every push/PR: unlike the fully mocked default suite, this
+# depends on live network and a backend that can be mid-redeploy. Runs
+# nightly as a canary, plus workflow_dispatch for an ad hoc check.
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: pytest -m integration -v
+        env:
+          STAGING_API_URL: ${{ secrets.STAGING_API_URL }}
+          STAGING_API_KEY: ${{ secrets.STAGING_API_KEY }}
