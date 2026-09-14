@@ -99,3 +99,16 @@ class Job(BaseModel):
     def is_terminal(self) -> bool:
         """True once `status` is `"succeeded"` or `"failed"`."""
         return self.status in TERMINAL_STATUSES
+
+
+class TranscriptionPage(BaseModel):
+    """One page of `KawaClient.list_transcriptions()`. Frozen.
+
+    ``next_cursor`` is ``None`` once there's nothing left; pass it back as
+    ``list_transcriptions(cursor=page.next_cursor)`` to fetch the next page.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    transcriptions: list[Job] = Field(default_factory=list)
+    next_cursor: str | None = None

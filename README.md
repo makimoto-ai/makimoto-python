@@ -78,6 +78,24 @@ for update in client.poll(job.job_id):
     print(update.status)
 ```
 
+List past jobs, one page at a time, with optional filters (`status`, `language`, `created_after`, `job_id`):
+
+```python
+page = client.list_transcriptions(status="succeeded", limit=25)
+for job in page.transcriptions:
+    print(job.job_id, job.status)
+
+if page.next_cursor:
+    next_page = client.list_transcriptions(cursor=page.next_cursor)
+```
+
+Or walk every matching job across all pages automatically:
+
+```python
+for job in client.iter_transcriptions(status="succeeded"):
+    print(job.job_id)
+```
+
 Release the client's connections when you're done with it, or use it as a context manager:
 
 ```python

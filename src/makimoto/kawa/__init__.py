@@ -23,7 +23,14 @@ Example
 
 from .client import DEFAULT_API_URL, KawaClient
 from .exceptions import KawaError, KawaValidationError
-from .models import TERMINAL_STATUSES, Job, JobError, Segment, TranscriptResult
+from .models import (
+    TERMINAL_STATUSES,
+    Job,
+    JobError,
+    Segment,
+    TranscriptionPage,
+    TranscriptResult,
+)
 
 __all__ = [
     "DEFAULT_API_URL",
@@ -35,4 +42,5 @@ __all__ = [
     "KawaValidationError",
     "Segment",
     "TranscriptResult",
+    "TranscriptionPage",
 ]

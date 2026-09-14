@@ -32,6 +32,11 @@
       show_root_heading: true
       heading_level: 3
 
+::: makimoto.kawa.TranscriptionPage
+    options:
+      show_root_heading: true
+      heading_level: 3
+
 ::: makimoto.kawa.JobError
     options:
       show_root_heading: true

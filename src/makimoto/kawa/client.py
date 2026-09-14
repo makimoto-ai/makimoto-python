@@ -13,7 +13,7 @@ import httpx2
 from pydantic import BaseModel, ValidationError
 
 from .exceptions import KawaError, KawaValidationError
-from .models import Job
+from .models import Job, TranscriptionPage
 
 DEFAULT_API_URL = "https://api.makimoto.ai"
 
@@ -150,18 +150,73 @@ class KawaClient:
 
     # -- endpoints ---------------------------------------------------------- #
 
-    def list_transcriptions(self) -> list[Job]:
-        """GET /v1/transcriptions - all jobs for the authenticated account.
+    def list_transcriptions(
+        self,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+        status: str | None = None,
+        language: str | None = None,
+        created_after: str | None = None,
+        job_id: str | None = None,
+    ) -> TranscriptionPage:
+        """GET /v1/transcriptions - one page of jobs for the authenticated account.
 
-        Reads whichever key the response actually uses (``transcriptions``,
-        ``jobs``, ``data``, or a nested ``items``), rather than assuming one
-        fixed shape.
+        Keyset-paginated: ``limit`` defaults to 10 server-side and is capped
+        at 100; pass ``cursor=page.next_cursor`` to fetch the next page,
+        ``next_cursor`` is ``None`` once there's nothing left. ``status``,
+        ``language``, ``created_after`` (an ISO 8601 timestamp), and
+        ``job_id`` (a UUID) are optional filters, composed with AND where
+        more than one is given.
+
+        Every argument is passed straight through as a query parameter, an
+        invalid value (e.g. an unrecognised ``status``) raises `KawaError`
+        from the backend rather than being validated here, that keeps this
+        client from carrying its own copy of rules the API already owns.
         """
-        body = self._request("GET", "/v1/transcriptions")
-        items = body.get("transcriptions") or body.get("jobs") or body.get("data") or []
-        if isinstance(items, dict):
-            items = items.get("items", [])
-        return [self._parse(Job, item) for item in items if isinstance(item, dict)]
+        params = {
+            "limit": limit,
+            "cursor": cursor,
+            "status": status,
+            "language": language,
+            "created_after": created_after,
+            "job_id": job_id,
+        }
+        query = {k: v for k, v in params.items() if v is not None}
+        body = self._request("GET", "/v1/transcriptions", params=query)
+        return self._parse(TranscriptionPage, body)
+
+    def iter_transcriptions(
+        self,
+        *,
+        page_size: int | None = None,
+        status: str | None = None,
+        language: str | None = None,
+        created_after: str | None = None,
+        job_id: str | None = None,
+    ) -> Iterator[Job]:
+        """Yield every matching job, fetching further pages automatically.
+
+        A thin wrapper around `list_transcriptions()` for the common case of
+        wanting all matching jobs rather than one page at a time. `page_size`
+        controls the underlying per-request `limit` (server default 10, capped
+        at 100), not how many jobs this yields overall, use `list_transcriptions`
+        directly if you need explicit control over paging instead.
+        """
+        cursor: str | None = None
+        while True:
+            page = self.list_transcriptions(
+                limit=page_size,
+                cursor=cursor,
+                status=status,
+                language=language,
+                created_after=created_after,
+                job_id=job_id,
+            )
+            yield from page.transcriptions
+            if page.next_cursor is None:
+                return
+            cursor = page.next_cursor
 
     def create_transcription(
         self,
