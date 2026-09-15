@@ -45,11 +45,20 @@ class KawaClient:
     explicitly (not the library default, kept to match this client's
     previous ``requests``-based behaviour).
 
-    Example
-    -------
-    >>> client = KawaClient(token="<dashboard-token>")
-    >>> job = client.transcribe("call.mp3", language="en")
-    >>> print(job.result.full_text)
+    Attributes:
+        token (str): API token, stripped of surrounding whitespace.
+        api_url (str): Base URL for the API, trailing slash removed.
+        timeout (float): Default per-request timeout, in seconds.
+        last_status (int | None): HTTP status code of the most recent
+            response, or ``None`` before any request has been made.
+        last_headers (dict[str, str]): Headers of the most recent response.
+        last_url (str | None): URL of the most recent response, or ``None``
+            before any request has been made.
+
+    Examples:
+        >>> client = KawaClient(token="<dashboard-token>")
+        >>> job = client.transcribe("call.mp3", language="en")
+        >>> print(job.result.full_text)
     """
 
     def __init__(
@@ -60,6 +69,20 @@ class KawaClient:
         timeout: float = 30.0,
         session: httpx2.Client | None = None,
     ):
+        """Initialise the client.
+
+        Args:
+            token (str | None): API token. If omitted, falls back to the
+                ``MAKIMOTO_API_TOKEN`` environment variable; an explicit
+                argument always wins over the environment variable. Neither
+                being set doesn't raise here, only lazily on the first
+                request that needs it.
+            api_url (str): Base URL for the API.
+            timeout (float): Default per-request timeout, in seconds.
+            session (httpx2.Client | None): Existing HTTP client to reuse.
+                If omitted, a new one is created with
+                ``follow_redirects=True``.
+        """
         if token is None:
             token = os.environ.get("MAKIMOTO_API_TOKEN", "")
             logger.debug(
@@ -94,11 +117,25 @@ class KawaClient:
     # -- internals ---------------------------------------------------------- #
 
     def _url(self, path: str) -> str:
-        """Join `api_url` and a path into a full request URL."""
+        """Join `api_url` and a path into a full request URL.
+
+        Args:
+            path (str): Path to append to ``api_url``.
+
+        Returns:
+            str: The joined request URL.
+        """
         return f"{self.api_url}{path}"
 
     def _headers(self) -> dict[str, str]:
-        """Build the Authorization header; raises if there's no token."""
+        """Build the Authorization header.
+
+        Returns:
+            dict[str, str]: Headers containing ``Authorization: Bearer <token>``.
+
+        Raises:
+            ValueError: If no token is available.
+        """
         if not self.token:
             raise ValueError("A Makimoto API token is required.")
         return {"Authorization": f"Bearer {self.token}"}
@@ -109,6 +146,18 @@ class KawaClient:
         Records `last_status`/`last_headers` for debugging, parses the JSON
         body (falls back to `{"raw": response.text}` if it isn't valid
         JSON), and raises `KawaError` on any status >= 400.
+
+        Args:
+            method (str): HTTP method, e.g. ``"GET"`` or ``"POST"``.
+            path (str): Request path, appended to ``api_url``.
+            **kwargs (Any): Forwarded to ``httpx2.Client.request``; a
+                ``timeout`` key overrides ``self.timeout`` for this call.
+
+        Returns:
+            Any: The parsed JSON response body.
+
+        Raises:
+            KawaError: If the response status is 400 or above.
         """
         # Upload streams the file, so allow a longer timeout for POST.
         timeout = kwargs.pop("timeout", self.timeout)
@@ -135,6 +184,16 @@ class KawaClient:
         `KawaError` subclass), so a caller catching `KawaError` gets this
         too, a 2xx response that doesn't match the expected shape is the
         same practical problem as a bad status code, just found later.
+
+        Args:
+            model (type[ModelT]): The pydantic model class to validate against.
+            body (Any): The raw response body to validate.
+
+        Returns:
+            ModelT: The validated model instance.
+
+        Raises:
+            KawaValidationError: If ``body`` doesn't match ``model``'s shape.
         """
         try:
             return model.model_validate(body)
@@ -151,6 +210,14 @@ class KawaClient:
         Reads whichever key the response actually uses (``transcriptions``,
         ``jobs``, ``data``, or a nested ``items``), rather than assuming one
         fixed shape.
+
+        Returns:
+            list[Job]: All transcription jobs for the account.
+
+        Raises:
+            KawaError: If the API returns a non-2xx response.
+            KawaValidationError: If an item in the response doesn't match
+                `Job`'s shape.
         """
         body = self._request("GET", "/v1/transcriptions")
         items = body.get("transcriptions") or body.get("jobs") or body.get("data") or []
@@ -165,7 +232,21 @@ class KawaClient:
         language: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> Job:
-        """POST /v1/transcriptions - submit a recording as multipart form-data."""
+        """POST /v1/transcriptions - submit a recording as multipart form-data.
+
+        Args:
+            file_path (str | Path): Path to the audio/video file to upload.
+            language (str | None): Optional language hint for transcription.
+            metadata (dict[str, Any] | None): Optional metadata to attach to
+                the job, sent as a JSON string.
+
+        Returns:
+            Job: The newly created job (typically ``queued`` or ``processing``).
+
+        Raises:
+            KawaError: If the API returns a non-2xx response.
+            KawaValidationError: If the response doesn't match `Job`'s shape.
+        """
         path = Path(file_path)
         data: dict[str, str] = {}
         if language:
@@ -184,11 +265,32 @@ class KawaClient:
         return self._parse(Job, body)
 
     def get_transcription(self, job_id: str) -> Job:
-        """GET /v1/transcriptions/{job_id} - status, and transcript once done."""
+        """GET /v1/transcriptions/{job_id} - status, and transcript once done.
+
+        Args:
+            job_id (str): The job's identifier.
+
+        Returns:
+            Job: The job's current state.
+
+        Raises:
+            KawaError: If the API returns a non-2xx response.
+            KawaValidationError: If the response doesn't match `Job`'s shape.
+        """
         return self._parse(Job, self._request("GET", f"/v1/transcriptions/{job_id}"))
 
     def delete_transcription(self, job_id: str) -> dict[str, Any]:
-        """DELETE /v1/transcriptions/{job_id} - remove a job, where supported."""
+        """DELETE /v1/transcriptions/{job_id} - remove a job, where supported.
+
+        Args:
+            job_id (str): The job's identifier.
+
+        Returns:
+            dict[str, Any]: The API's response body.
+
+        Raises:
+            KawaError: If the API returns a non-2xx response.
+        """
         # _request() is genuinely Any (a response body could be any JSON
         # shape); DELETE's contract is known to be a dict, so cast rather
         # than widen this method's own, more useful, return type.
@@ -197,7 +299,12 @@ class KawaClient:
     def usage(self) -> Usage:
         """GET /v1/transcriptions/usage - the caller's transcription minute quota.
 
-        Returns ``limit_minutes``/``used_minutes``/``remaining_minutes``.
+        Returns:
+            Usage: ``limit_minutes``/``used_minutes``/``remaining_minutes``.
+
+        Raises:
+            KawaError: If the API returns a non-2xx response.
+            KawaValidationError: If the response doesn't match `Usage`'s shape.
         """
         return self._parse(Usage, self._request("GET", "/v1/transcriptions/usage"))
 
@@ -215,6 +322,18 @@ class KawaClient:
         ``failed``. Yielding (rather than blocking) lets a UI show live updates.
         Gives up silently after ``max_attempts``, use ``transcribe()`` instead if
         you want a clear exception on timeout.
+
+        Args:
+            job_id (str): The job's identifier.
+            interval (float): Seconds to sleep between polls.
+            max_attempts (int): Maximum number of polls before giving up.
+
+        Yields:
+            Job: The job's state on each poll.
+
+        Raises:
+            KawaError: If the API returns a non-2xx response.
+            KawaValidationError: If a response doesn't match `Job`'s shape.
         """
         last_status = None
         for attempt in range(max_attempts):
@@ -250,6 +369,23 @@ class KawaClient:
         not a malfunction, returned like ``get_transcription()`` would, check
         ``.status``/``.error``. Only exhausting ``max_attempts`` without reaching
         a terminal status raises, since that's genuinely exceptional.
+
+        Args:
+            file_path (str | Path): Path to the audio/video file to upload.
+            language (str | None): Optional language hint for transcription.
+            metadata (dict[str, Any] | None): Optional metadata to attach to
+                the job.
+            interval (float): Seconds to sleep between polls.
+            max_attempts (int): Maximum number of polls before giving up.
+
+        Returns:
+            Job: The job in its terminal state (``succeeded`` or ``failed``).
+
+        Raises:
+            TimeoutError: If ``max_attempts`` is exhausted before the job
+                reaches a terminal status.
+            KawaError: If the API returns a non-2xx response.
+            KawaValidationError: If a response doesn't match `Job`'s shape.
         """
         job = self.create_transcription(file_path, language=language, metadata=metadata)
         final = job
