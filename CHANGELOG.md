@@ -4,6 +4,113 @@ All notable changes to `makimoto-kawa` are documented here. Format loosely follo
 
 <!-- version list -->
 
+## v0.2.0 (2026-09-15)
+
+### Bug Fixes
+
+- Add type and audio_seconds to Job, silently dropped until now
+  ([#8](https://github.com/makimoto-ai/makimoto-python/pull/8),
+  [`8d10398`](https://github.com/makimoto-ai/makimoto-python/commit/8d10398fba1fbce13162297866e0e4048d4a68f8))
+
+- CI changes ([#11](https://github.com/makimoto-ai/makimoto-python/pull/11),
+  [`bd59260`](https://github.com/makimoto-ai/makimoto-python/commit/bd592608616e44cde382da50746f49a1ceb50793))
+
+- Fix for ruff check ([#11](https://github.com/makimoto-ai/makimoto-python/pull/11),
+  [`bd59260`](https://github.com/makimoto-ai/makimoto-python/commit/bd592608616e44cde382da50746f49a1ceb50793))
+
+- Remove deprecated method ([#11](https://github.com/makimoto-ai/makimoto-python/pull/11),
+  [`bd59260`](https://github.com/makimoto-ai/makimoto-python/commit/bd592608616e44cde382da50746f49a1ceb50793))
+
+- Resolve merge conflicts ([#11](https://github.com/makimoto-ai/makimoto-python/pull/11),
+  [`bd59260`](https://github.com/makimoto-ai/makimoto-python/commit/bd592608616e44cde382da50746f49a1ceb50793))
+
+- Switch auth from JWT token to a static api_key
+  ([#4](https://github.com/makimoto-ai/makimoto-python/pull/4),
+  [`3a6cec4`](https://github.com/makimoto-ai/makimoto-python/commit/3a6cec4f2482687eb89fbe0b5d647bad01ffe948))
+
+- Updated delete_transcription to delete_job
+  ([#11](https://github.com/makimoto-ai/makimoto-python/pull/11),
+  [`bd59260`](https://github.com/makimoto-ai/makimoto-python/commit/bd592608616e44cde382da50746f49a1ceb50793))
+
+- Updated get-transcription to get-job
+  ([#11](https://github.com/makimoto-ai/makimoto-python/pull/11),
+  [`bd59260`](https://github.com/makimoto-ai/makimoto-python/commit/bd592608616e44cde382da50746f49a1ceb50793))
+
+### Chores
+
+- Updated init docstring ([#11](https://github.com/makimoto-ai/makimoto-python/pull/11),
+  [`bd59260`](https://github.com/makimoto-ai/makimoto-python/commit/bd592608616e44cde382da50746f49a1ceb50793))
+
+### Code Style
+
+- Apply ruff formatting to source, examples, and docs
+  ([#3](https://github.com/makimoto-ai/makimoto-python/pull/3),
+  [`1ace21a`](https://github.com/makimoto-ai/makimoto-python/commit/1ace21aaa68fb06c0c464270415d0ef13ce8ccc5))
+
+### Continuous Integration
+
+- Compare against HEAD to detect a due release, not the index
+  ([#9](https://github.com/makimoto-ai/makimoto-python/pull/9),
+  [`ce08096`](https://github.com/makimoto-ai/makimoto-python/commit/ce080966d76643a355a51e132ad39e2695918686))
+
+- Harden CI/CD with ruff, pyrefly, coverage gate, PR-based release
+  ([#3](https://github.com/makimoto-ai/makimoto-python/pull/3),
+  [`1ace21a`](https://github.com/makimoto-ai/makimoto-python/commit/1ace21aaa68fb06c0c464270415d0ef13ce8ccc5))
+
+- Replace mypy with ruff + pyrefly, add coverage gate
+  ([#3](https://github.com/makimoto-ai/makimoto-python/pull/3),
+  [`1ace21a`](https://github.com/makimoto-ai/makimoto-python/commit/1ace21aaa68fb06c0c464270415d0ef13ce8ccc5))
+
+- Switch release automation to a PR-based flow
+  ([#3](https://github.com/makimoto-ai/makimoto-python/pull/3),
+  [`1ace21a`](https://github.com/makimoto-ai/makimoto-python/commit/1ace21aaa68fb06c0c464270415d0ef13ce8ccc5))
+
+### Documentation
+
+- Add list_transcriptions()/iter_transcriptions() usage examples
+  ([#5](https://github.com/makimoto-ai/makimoto-python/pull/5),
+  [`2d5fd0b`](https://github.com/makimoto-ai/makimoto-python/commit/2d5fd0b3628fbf1081f07f141ba5f0a00e56a8d9))
+
+- Updated docstrings for client ([#11](https://github.com/makimoto-ai/makimoto-python/pull/11),
+  [`bd59260`](https://github.com/makimoto-ai/makimoto-python/commit/bd592608616e44cde382da50746f49a1ceb50793))
+
+- Updated docstrings for exceptions ([#11](https://github.com/makimoto-ai/makimoto-python/pull/11),
+  [`bd59260`](https://github.com/makimoto-ai/makimoto-python/commit/bd592608616e44cde382da50746f49a1ceb50793))
+
+- Updated docstrings for models ([#11](https://github.com/makimoto-ai/makimoto-python/pull/11),
+  [`bd59260`](https://github.com/makimoto-ai/makimoto-python/commit/bd592608616e44cde382da50746f49a1ceb50793))
+
+### Features
+
+- Add iter_transcriptions() to auto-paginate list_transcriptions()
+  ([#5](https://github.com/makimoto-ai/makimoto-python/pull/5),
+  [`2d5fd0b`](https://github.com/makimoto-ai/makimoto-python/commit/2d5fd0b3628fbf1081f07f141ba5f0a00e56a8d9))
+
+- Add pagination and filters to list_transcriptions()
+  ([#5](https://github.com/makimoto-ai/makimoto-python/pull/5),
+  [`2d5fd0b`](https://github.com/makimoto-ai/makimoto-python/commit/2d5fd0b3628fbf1081f07f141ba5f0a00e56a8d9))
+
+- Added models for transcript and summary results
+  ([#11](https://github.com/makimoto-ai/makimoto-python/pull/11),
+  [`bd59260`](https://github.com/makimoto-ai/makimoto-python/commit/bd592608616e44cde382da50746f49a1ceb50793))
+
+- Added tag, summary methods ([#11](https://github.com/makimoto-ai/makimoto-python/pull/11),
+  [`bd59260`](https://github.com/makimoto-ai/makimoto-python/commit/bd592608616e44cde382da50746f49a1ceb50793))
+
+- Summarize tagging services ([#11](https://github.com/makimoto-ai/makimoto-python/pull/11),
+  [`bd59260`](https://github.com/makimoto-ai/makimoto-python/commit/bd592608616e44cde382da50746f49a1ceb50793))
+
+### Testing
+
+- Add an integration suite against real staging
+  ([#7](https://github.com/makimoto-ai/makimoto-python/pull/7),
+  [`d9457fe`](https://github.com/makimoto-ai/makimoto-python/commit/d9457fec9f584eefc76376b5d2f1b691c075e84d))
+
+- Narrow Optional access pyrefly caught, normalize dividers
+  ([#3](https://github.com/makimoto-ai/makimoto-python/pull/3),
+  [`1ace21a`](https://github.com/makimoto-ai/makimoto-python/commit/1ace21aaa68fb06c0c464270415d0ef13ce8ccc5))
+
+
 ## v0.1.3 (2026-08-27)
 
 
