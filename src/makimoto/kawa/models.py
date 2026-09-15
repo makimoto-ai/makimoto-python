@@ -164,16 +164,16 @@ class Job(BaseModel):
     ``error`` only once ``failed``.
 
     The fields below aren't all present on every response;
-    each is only sent by specific endpoints: 
-    - ``received_at`` only on the response to ``create_transcription()``; 
-    - ``original_filename``, ``language`` and ``audio_seconds`` only on 
-        ``list_transcriptions()``/``iter_transcriptions()`` entries; 
+    each is only sent by specific endpoints:
+    - ``received_at`` only on the response to ``create_transcription()``;
+    - ``original_filename``, ``language`` and ``audio_seconds`` only on
+        ``list_transcriptions()``/``iter_transcriptions()`` entries;
     - ``created_at`` and ``updated_at`` on those too, plus ``type`` on
-        ``get_transcription()``. 
+        ``get_job()``.
 
-    ``language`` here is the list view's own top-level field (whatever was 
-    requested at submission), distinct from the detected language on ``result.language``,
-    which only exists once a job succeeds. 
+    ``language`` here is the list view's own top-level field (whatever was
+    requested at submission), distinct from the detected language on
+    ``result.language``, which only exists once a job succeeds.
 
     ``type`` is always ``"transcription"``, ``"summary"`` or ``"tags"``.
 
@@ -191,6 +191,19 @@ class Job(BaseModel):
         result (TranscriptResult | SummaryResult | TagsResult | None): The
             job's result, once ``succeeded``; its shape follows ``type``.
         error (JobError | None): The failure detail, once ``failed``.
+        received_at (str | None): Submission timestamp, only on
+            `KawaClient.create_transcription()`'s response.
+        original_filename (str | None): Only on `list_transcriptions()`/
+            `iter_transcriptions()` entries.
+        language (str | None): Requested/submission-time language code, only
+            on `list_transcriptions()`/`iter_transcriptions()` entries;
+            distinct from the detected `result.language`.
+        audio_seconds (float | None): Only on `list_transcriptions()`/
+            `iter_transcriptions()` entries.
+        created_at (str | None): Only on `list_transcriptions()`/
+            `iter_transcriptions()` entries.
+        updated_at (str | None): Only on `list_transcriptions()`/
+            `iter_transcriptions()` entries.
     """
 
     job_id: str
@@ -205,7 +218,6 @@ class Job(BaseModel):
     audio_seconds: float | None = None
     created_at: str | None = None
     updated_at: str | None = None
-    type: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -246,7 +258,9 @@ class Job(BaseModel):
                 model instance for ``type``; otherwise unchanged.
         """
         if isinstance(data, dict) and isinstance(data.get("result"), dict):
-            model = _RESULT_MODEL_BY_TYPE.get(data.get("type") or "transcription", TranscriptResult)
+            model = _RESULT_MODEL_BY_TYPE.get(
+                data.get("type") or "transcription", TranscriptResult
+            )
             data = {**data, "result": model.model_validate(data["result"])}
         return data
 

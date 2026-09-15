@@ -1,6 +1,6 @@
 # Usage
 
-*Last updated: 2026-09-14*
+*Last updated: 2026-09-15*
 
 This page shows a quick demonstration of how to make use of the SDK. 
 
@@ -26,6 +26,26 @@ job = client.create_transcription("call.mp3", language="en")
 
 for update in client.poll(job.job_id):
     print(update.status)
+```
+
+Once a transcription has succeeded, summarise or tag it by its `job_id`. Both return a new job, fetched or polled the same way as a transcription, through its own `job_id`, not the source transcription's:
+
+```python
+summary_job = client.create_summary(job.job_id)
+for update in client.poll(summary_job.job_id):
+    print(update.status)
+print(update.result.topic, update.result.summary)
+
+tags_job = client.create_tags(job.job_id)
+for update in client.poll(tags_job.job_id):
+    print(update.status)
+print(update.result.tags)
+```
+
+Or skip the transcription entirely and summarise/tag a transcript you already have, with `transcript_text` instead of a job id (exactly one of the two must be given):
+
+```python
+summary_job = client.create_summary(transcript_text="the customer called about a billing issue...")
 ```
 
 List past jobs, one page at a time, with optional filters (`status`, `language`, `created_after`, `job_id`):

@@ -27,6 +27,16 @@
       show_root_heading: true
       heading_level: 3
 
+::: makimoto.kawa.SummaryResult
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: makimoto.kawa.TagsResult
+    options:
+      show_root_heading: true
+      heading_level: 3
+
 ::: makimoto.kawa.Segment
     options:
       show_root_heading: true
