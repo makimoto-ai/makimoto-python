@@ -95,7 +95,9 @@ print(update.result.tags)
 Or skip the transcription entirely and summarise/tag a transcript you already have, with `transcript_text` instead of a job id (exactly one of the two must be given):
 
 ```python
-summary_job = client.create_summary(transcript_text="the customer called about a billing issue...")
+summary_job = client.create_summary(
+    transcript_text="the customer called about a billing issue..."
+)
 ```
 
 Fetch or delete any job (transcription, summary, or tags) by its `job_id`:
