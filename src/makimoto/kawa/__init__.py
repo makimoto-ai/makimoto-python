@@ -12,14 +12,14 @@ submit a recording, poll until done, read the transcript.
 
 A summary or tags job is fetched/polled the same way as a transcription, through its own ``job_id``.
 
-Authenticate every request with a dashboard token:
+Authenticate every request with an API key (create one from the dashboard):
 
-    Authorization: Bearer <makimoto_api_token>
+    Authorization: Bearer <makimoto_api_key>
 
 Example
 -------
 >>> from makimoto.kawa import KawaClient
->>> client = KawaClient(token="<dashboard-token>")
+>>> client = KawaClient(api_key="<your api key>")
 >>> job = client.transcribe("call.mp3", language="en")
 >>> if job.status == "succeeded":
 ...     print(job.result.full_text)
@@ -39,16 +39,16 @@ from .models import (
 )
 
 __all__ = [
+    "DEFAULT_API_URL",
+    "TERMINAL_STATUSES",
+    "Job",
+    "JobError",
     "KawaClient",
     "KawaError",
     "KawaValidationError",
-    "Job",
-    "JobError",
     "Segment",
     "SummaryResult",
     "TagsResult",
     "TranscriptResult",
-    "Usage",
-    "DEFAULT_API_URL",
-    "TERMINAL_STATUSES",
+    "TranscriptionPage",
 ]

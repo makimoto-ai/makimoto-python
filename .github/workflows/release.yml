@@ -1,37 +1,124 @@
 name: Release
 
+# PR-based release flow: nothing here ever pushes a commit straight to
+# `main`, so no branch-ruleset bypass is needed anywhere.
+#
+#   propose-release: on every push to main, computes the next version from
+#   Conventional Commits and, if one is due, opens/updates a standing PR
+#   with the version bump + CHANGELOG.md entry. That PR goes through the
+#   same review + required checks as any other PR.
+#
+#   tag-release: also on every push to main, checks whether the version
+#   currently in pyproject.toml already has a matching git tag. It won't,
+#   the one time this push IS the release PR just being merged, in which
+#   case it tags that commit and creates the GitHub release. Tag pushes
+#   aren't covered by the `main` branch ruleset, so this needs no special
+#   permission either.
+#
+# Both jobs need RELEASE_PR_TOKEN (a PAT with contents:write +
+# pull-requests:write on this repo, not an org owner's account is fine),
+# not the default GITHUB_TOKEN: GitHub refuses to let a GITHUB_TOKEN-opened
+# PR trigger other workflows (anti-recursion protection), which would
+# otherwise leave the release PR's own required CI checks never running,
+# so it could never become mergeable. See CONTRIBUTING.md for how to set
+# this up.
+
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # kept as a manual escape hatch alongside the automatic trigger
+  workflow_dispatch:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  release:
+  propose-release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_PR_TOKEN }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - run: pip install "python-semantic-release==10.6.1" "gitpython<3.1.60"
+      - name: Compute next version and update pyproject.toml / CHANGELOG.md
+        # Deliberately --no-commit --no-tag --no-push --no-vcs-release: this
+        # job only ever edits files in the working tree, the PR step below
+        # is what commits and pushes, and only to a side branch.
+        run: >
+          semantic-release version
+          --no-commit --no-tag --no-push --no-vcs-release
+      - name: Check whether a release is actually due
+        id: diff
+        # Against HEAD, not a bare `git diff`: semantic-release version
+        # --no-commit still stages the file writes (git add), it only skips
+        # the actual commit, so a plain `git diff` (working tree vs the
+        # index) sees no difference even when a real bump is due. Confirmed
+        # by reproducing this exact step locally, not guessed.
+        run: |
+          if git diff --quiet HEAD -- pyproject.toml CHANGELOG.md; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Read the computed version
+        if: steps.diff.outputs.changed == 'true'
+        id: version
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Open or update the release PR
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.RELEASE_PR_TOKEN }}
+          branch: chore/release
+          commit-message: "chore(release): ${{ steps.version.outputs.version }}"
+          title: "chore(release): ${{ steps.version.outputs.version }}"
+          body: >
+            Automated version bump to `${{ steps.version.outputs.version }}`,
+            computed from Conventional Commits since the last release.
+            Merging this cuts the tag and the GitHub/PyPI release.
+          delete-branch: true
+
+  tag-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PR_TOKEN }}
+      - name: Check whether the current version is already tagged
+        id: check
+        # grep/sed rather than a Python one-liner: this step runs before
+        # setup-python below, so it shouldn't depend on whatever unpinned
+        # system Python the runner image happens to ship.
+        run: |
+          version=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.check.outputs.release == 'true'
+        with:
+          python-version: "3.12"
       - name: Install python-semantic-release
-        # gitpython<3.1.60: 3.1.60 removed Actor.name_email_regex, which
-        # python-semantic-release 10.6.1 still relies on internally, real
-        # incident, confirmed by bisecting GitPython's own source between
-        # 3.1.59 (has it) and 3.1.60 (doesn't). Neither dependency was
-        # pinned before, so a routine GitPython release silently broke
-        # this workflow. Pinning both here, not just gitpython, so this
-        # doesn't quietly drift again.
+        if: steps.check.outputs.release == 'true'
         run: pip install "python-semantic-release==10.6.1" "gitpython<3.1.60"
-      - name: Compute next version from Conventional Commits, tag, update CHANGELOG.md, create a GitHub release
-        run: semantic-release version
+      - name: Tag this commit and create the GitHub release
+        # --no-commit: there is nothing left to commit, pyproject.toml and
+        # CHANGELOG.md already carry this version from the merged release
+        # PR. This only ever pushes a tag, never a commit to main.
+        if: steps.check.outputs.release == 'true'
+        run: semantic-release version --no-commit
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN }}

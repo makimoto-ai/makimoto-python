@@ -163,6 +163,20 @@ class Job(BaseModel):
     shape ``result`` takes; ``result`` is only present once ``succeeded``,
     ``error`` only once ``failed``.
 
+    The fields below aren't all present on every response;
+    each is only sent by specific endpoints: 
+    - ``received_at`` only on the response to ``create_transcription()``; 
+    - ``original_filename``, ``language`` and ``audio_seconds`` only on 
+        ``list_transcriptions()``/``iter_transcriptions()`` entries; 
+    - ``created_at`` and ``updated_at`` on those too, plus ``type`` on
+        ``get_transcription()``. 
+
+    ``language`` here is the list view's own top-level field (whatever was 
+    requested at submission), distinct from the detected language on ``result.language``,
+    which only exists once a job succeeds. 
+
+    ``type`` is always ``"transcription"``, ``"summary"`` or ``"tags"``.
+
     Attributes:
         job_id (str): The job's identifier. Poll a summary or tags job by
             its own ``job_id``, not the source transcription's.
@@ -185,6 +199,13 @@ class Job(BaseModel):
     source_job_id: str | None = None
     result: TranscriptResult | SummaryResult | TagsResult | None = None
     error: JobError | None = None
+    received_at: str | None = None
+    original_filename: str | None = None
+    language: str | None = None
+    audio_seconds: float | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    type: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -237,3 +258,16 @@ class Job(BaseModel):
             bool: Whether the job has reached a terminal status.
         """
         return self.status in TERMINAL_STATUSES
+
+
+class TranscriptionPage(BaseModel):
+    """One page of `KawaClient.list_transcriptions()`. Frozen.
+
+    ``next_cursor`` is ``None`` once there's nothing left; pass it back as
+    ``list_transcriptions(cursor=page.next_cursor)`` to fetch the next page.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    transcriptions: list[Job] = Field(default_factory=list)
+    next_cursor: str | None = None

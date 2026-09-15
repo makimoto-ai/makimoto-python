@@ -19,7 +19,13 @@ class KawaError(RuntimeError):
         headers (dict[str, str]): The response headers.
     """
 
-    def __init__(self, status_code: int, body: Any, url: str, headers: dict[str, str] | None = None):
+    def __init__(
+        self,
+        status_code: int,
+        body: Any,
+        url: str,
+        headers: dict[str, str] | None = None,
+    ):
         """Initialise the error.
 
         Args:
@@ -79,4 +85,7 @@ class KawaValidationError(KawaError):
         self.body = body
         self.url = url
         self.headers = dict(headers or {})
-        RuntimeError.__init__(self, f"Response from {url} did not match the expected shape: {validation_error}")
+        RuntimeError.__init__(
+            self,
+            f"Response from {url} did not match the expected shape: {validation_error}",
+        )

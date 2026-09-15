@@ -1,13 +1,13 @@
 # Usage
 
-*Last updated: 2026-08-26*
+*Last updated: 2026-09-14*
 
 This page shows a quick demonstration of how to make use of the SDK. 
 
 ```python
 from makimoto import kawa
 
-client = kawa.KawaClient(token="<dashboard-token>")   # or set MAKIMOTO_API_TOKEN instead
+client = kawa.KawaClient(api_key="<your api key>")  # or set MAKIMOTO_API_KEY instead
 
 job = client.transcribe("call.mp3", language="en")
 
@@ -17,7 +17,7 @@ else:
     print(job.error)
 ```
 
-See the [quickstart examples](https://github.com/makimoto-ai/makimoto-python/blob/main/examples/quickstart.py) for a complete, runnable script; it ships with a small sample audio file, so `python examples/quickstart.py` works out of the box once `MAKIMOTO_API_TOKEN` is set.
+See the [quickstart examples](https://github.com/makimoto-ai/makimoto-python/blob/main/examples/quickstart.py) for a complete, runnable script; it ships with a small sample audio file, so `python examples/quickstart.py` works out of the box once `MAKIMOTO_API_KEY` is set.
 
 `transcribe()` submits the recording and polls until it's done in one call, raising `TimeoutError` if it never finishes. For manual control (e.g. streaming live status updates to a UI), the lower-level primitives are still there:
 
@@ -28,17 +28,28 @@ for update in client.poll(job.job_id):
     print(update.status)
 ```
 
-Check your account's transcription quota:
+List past jobs, one page at a time, with optional filters (`status`, `language`, `created_after`, `job_id`):
 
 ```python
-usage = client.usage()
-print(f"{usage.used_minutes}/{usage.limit_minutes} minutes used")
+page = client.list_transcriptions(status="succeeded", limit=25)
+for job in page.transcriptions:
+    print(job.job_id, job.status)
+
+if page.next_cursor:
+    next_page = client.list_transcriptions(cursor=page.next_cursor)
+```
+
+Or walk every matching job across all pages automatically:
+
+```python
+for job in client.iter_transcriptions(status="succeeded"):
+    print(job.job_id)
 ```
 
 Release the client's connections when you're done with it, or use it as a context manager:
 
 ```python
-with kawa.KawaClient(token="<dashboard-token>") as client:
+with kawa.KawaClient(api_key="<your api key>") as client:
     ...
 ```
 
@@ -59,9 +70,12 @@ Quiet by default. To see what the SDK is doing (credential source, a poll that g
 
 ```python
 import logging
+
 logging.basicConfig()  # attaches a handler so the lines below actually print somewhere
-logging.getLogger("makimoto.kawa.client").setLevel(logging.DEBUG)  # this SDK's own events
-logging.getLogger("httpx2").setLevel(logging.DEBUG)                 # every request/response
+logging.getLogger("makimoto.kawa.client").setLevel(
+    logging.DEBUG
+)  # this SDK's own events
+logging.getLogger("httpx2").setLevel(logging.DEBUG)  # every request/response
 ```
 
 See the [SDK API Reference](api-reference.md) for the full set of methods and models.

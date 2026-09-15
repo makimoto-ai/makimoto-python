@@ -13,17 +13,17 @@ import httpx2
 from pydantic import BaseModel, ValidationError
 
 from .exceptions import KawaError, KawaValidationError
-from .models import Job, Usage
+from .models import Job, TranscriptionPage
 
 DEFAULT_API_URL = "https://api.makimoto.ai"
 
 # Raw request/response logging already comes from httpx2's own "httpx2"
 # logger (enable it directly if that's all you need). This logger is only
 # for SDK-level events httpx2 can't see: credential source, giving up on a
-# poll. Never logs the token/credential value itself.
+# poll. Never logs the credential value itself.
 #
-# NullHandler prevents Python's default handler from printing WARNING+ 
-# records to stderr when consumers haven't configured logging. 
+# NullHandler prevents Python's default handler from printing WARNING+
+# records to stderr when consumers haven't configured logging.
 # Libraries emit; applications configure handlers.
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -34,11 +34,13 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 class KawaClient:
     """Minimal client for the Makimoto Kawa transcription API.
 
-    Credentials: pass ``token`` explicitly, or omit it and set the
-    ``MAKIMOTO_API_TOKEN`` environment variable instead, the explicit
+    Credentials: pass ``api_key`` explicitly, or omit it and set the
+    ``MAKIMOTO_API_KEY`` environment variable instead, the explicit
     argument always wins if both are present. Neither being set doesn't
     raise here, only lazily, the first time a method actually sends a
-    request.
+    request. This is a static API key (create one from the dashboard),
+    not the short-lived dashboard login JWT, the transcription endpoints
+    this client calls no longer accept that.
 
     Transport: uses ``httpx2.Client`` internally, one instance per
     ``KawaClient``, reused across calls, with ``follow_redirects=True`` set
@@ -63,7 +65,7 @@ class KawaClient:
 
     def __init__(
         self,
-        token: str | None = None,
+        api_key: str | None = None,
         api_url: str = DEFAULT_API_URL,
         *,
         timeout: float = 30.0,
@@ -72,24 +74,21 @@ class KawaClient:
         """Initialise the client.
 
         Args:
-            token (str | None): API token. If omitted, falls back to the
-                ``MAKIMOTO_API_TOKEN`` environment variable; an explicit
-                argument always wins over the environment variable. Neither
-                being set doesn't raise here, only lazily on the first
-                request that needs it.
+            api_key (str | None): API key. If omitted, falls back to
+            the environment variable.
             api_url (str): Base URL for the API.
             timeout (float): Default per-request timeout, in seconds.
             session (httpx2.Client | None): Existing HTTP client to reuse.
                 If omitted, a new one is created with
                 ``follow_redirects=True``.
         """
-        if token is None:
-            token = os.environ.get("MAKIMOTO_API_TOKEN", "")
+        if api_key is None:
+            api_key = os.environ.get("MAKIMOTO_API_KEY", "")
             logger.debug(
-                "no token argument given, using MAKIMOTO_API_TOKEN (%s)",
-                "found" if token else "not set",
+                "no api_key argument given, using MAKIMOTO_API_KEY (%s)",
+                "found" if api_key else "not set",
             )
-        self.token = token.strip()
+        self.api_key = api_key.strip()
         self.api_url = (api_url or DEFAULT_API_URL).rstrip("/")
         self.timeout = timeout
         self._session = session or httpx2.Client(follow_redirects=True)
@@ -108,7 +107,7 @@ class KawaClient:
         """
         self._session.close()
 
-    def __enter__(self) -> "KawaClient":
+    def __enter__(self) -> KawaClient:
         return self
 
     def __exit__(self, *exc_info: object) -> None:
@@ -128,17 +127,17 @@ class KawaClient:
         return f"{self.api_url}{path}"
 
     def _headers(self) -> dict[str, str]:
-        """Build the Authorization header.
+        """Build the Authorization header; raises if there's no API key.
 
         Returns:
-            dict[str, str]: Headers containing ``Authorization: Bearer <token>``.
+            dict[str, str]: Headers containing ``Authorization: Bearer <api_key>``.
 
         Raises:
-            ValueError: If no token is available.
+            ValueError: If no API key is available.
         """
-        if not self.token:
-            raise ValueError("A Makimoto API token is required.")
-        return {"Authorization": f"Bearer {self.token}"}
+        if not self.api_key:
+            raise ValueError("A Makimoto API key is required.")
+        return {"Authorization": f"Bearer {self.api_key}"}
 
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         """The one place every HTTP call goes through.
@@ -173,7 +172,10 @@ class KawaClient:
             body = {"raw": response.text}
         if response.status_code >= 400:
             raise KawaError(
-                response.status_code, body, self.last_url, headers=dict(response.headers)
+                response.status_code,
+                body,
+                self.last_url,
+                headers=dict(response.headers),
             )
         return body
 
@@ -204,26 +206,73 @@ class KawaClient:
 
     # -- endpoints ---------------------------------------------------------- #
 
-    def list_transcriptions(self) -> list[Job]:
-        """GET /v1/transcriptions - all jobs for the authenticated account.
+    def list_transcriptions(
+        self,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+        status: str | None = None,
+        language: str | None = None,
+        created_after: str | None = None,
+        job_id: str | None = None,
+    ) -> TranscriptionPage:
+        """GET /v1/transcriptions - one page of jobs for the authenticated account.
 
-        Reads whichever key the response actually uses (``transcriptions``,
-        ``jobs``, ``data``, or a nested ``items``), rather than assuming one
-        fixed shape.
+        Keyset-paginated: ``limit`` defaults to 10 server-side and is capped
+        at 100; pass ``cursor=page.next_cursor`` to fetch the next page,
+        ``next_cursor`` is ``None`` once there's nothing left. ``status``,
+        ``language``, ``created_after`` (an ISO 8601 timestamp), and
+        ``job_id`` (a UUID) are optional filters, composed with AND where
+        more than one is given.
 
-        Returns:
-            list[Job]: All transcription jobs for the account.
-
-        Raises:
-            KawaError: If the API returns a non-2xx response.
-            KawaValidationError: If an item in the response doesn't match
-                `Job`'s shape.
+        Every argument is passed straight through as a query parameter, an
+        invalid value (e.g. an unrecognised ``status``) raises `KawaError`
+        from the backend rather than being validated here, that keeps this
+        client from carrying its own copy of rules the API already owns.
         """
-        body = self._request("GET", "/v1/transcriptions")
-        items = body.get("transcriptions") or body.get("jobs") or body.get("data") or []
-        if isinstance(items, dict):
-            items = items.get("items", [])
-        return [self._parse(Job, item) for item in items if isinstance(item, dict)]
+        params = {
+            "limit": limit,
+            "cursor": cursor,
+            "status": status,
+            "language": language,
+            "created_after": created_after,
+            "job_id": job_id,
+        }
+        query = {k: v for k, v in params.items() if v is not None}
+        body = self._request("GET", "/v1/transcriptions", params=query)
+        return self._parse(TranscriptionPage, body)
+
+    def iter_transcriptions(
+        self,
+        *,
+        page_size: int | None = None,
+        status: str | None = None,
+        language: str | None = None,
+        created_after: str | None = None,
+        job_id: str | None = None,
+    ) -> Iterator[Job]:
+        """Yield every matching job, fetching further pages automatically.
+
+        A thin wrapper around `list_transcriptions()` for the common case of
+        wanting all matching jobs rather than one page at a time. `page_size`
+        controls the underlying per-request `limit` (server default 10, capped
+        at 100), not how many jobs this yields overall, use `list_transcriptions`
+        directly if you need explicit control over paging instead.
+        """
+        cursor: str | None = None
+        while True:
+            page = self.list_transcriptions(
+                limit=page_size,
+                cursor=cursor,
+                status=status,
+                language=language,
+                created_after=created_after,
+                job_id=job_id,
+            )
+            yield from page.transcriptions
+            if page.next_cursor is None:
+                return
+            cursor = page.next_cursor
 
     def create_transcription(
         self,
@@ -299,90 +348,14 @@ class KawaClient:
         # _request() is genuinely Any (a response body could be any JSON
         # shape); DELETE's contract is known to be a dict, so cast rather
         # than widen this method's own, more useful, return type.
-        return cast(dict[str, Any], self._request("DELETE", f"/v1/transcriptions/{job_id}"))
-
-    def create_summary(
-        self,
-        transcription_job_id: str | None = None,
-        *,
-        transcript_text: str | None = None,
-    ) -> Job:
-        """POST /v1/summarize - create a summary job from a transcript.
-
-        Exactly one of ``transcription_job_id`` or ``transcript_text`` must
-        be given, the API rejects zero or both with a 400.
-
-        Args:
-            transcription_job_id (str | None): One of the caller's own
-                transcription jobs, in status ``succeeded``. Mutually
-                exclusive with ``transcript_text``.
-            transcript_text (str | None): A transcript supplied directly,
-                with no transcription job behind it. Mutually exclusive
-                with ``transcription_job_id``.
-
-        Returns:
-            Job: The newly created job (``type="summary"``, typically
-                ``processing``). 
-
-        Raises:
-            KawaError: If the API returns a non-2xx response, including a
-                400 when neither or both of the two arguments are given.
-            KawaValidationError: If the response doesn't match `Job`'s shape.
-        """
-        body: dict[str, str] = {}
-        if transcription_job_id is not None:
-            body["transcription_job_id"] = transcription_job_id
-        if transcript_text is not None:
-            body["transcript_text"] = transcript_text
-        return self._parse(Job, self._request("POST", "/v1/summarize", json=body))
-
-    def create_tags(
-        self,
-        transcription_job_id: str | None = None,
-        *,
-        transcript_text: str | None = None,
-    ) -> Job:
-        """POST /v1/tag - create a tags job from a transcript.
-
-        Exactly one of ``transcription_job_id`` or ``transcript_text`` must be given, 
-        the API rejects zero or both with a 400.
-
-        Note that the tag taxonomy is fixed by the service and isn't configurable 
-        per account. 
-
-        Args:
-            transcription_job_id (str | None): One of the caller's own
-                transcription jobs, in status ``succeeded``. Mutually
-                exclusive with ``transcript_text``.
-            transcript_text (str | None): A transcript supplied directly,
-                with no transcription job behind it. Mutually exclusive
-                with ``transcription_job_id``.
-
-        Returns:
-            Job: The newly created job (``type="tags"``, typically
-                ``processing``). 
-
-        Raises:
-            KawaError: If the API returns a non-2xx response, including a
-                400 when neither or both of the two arguments are given.
-            KawaValidationError: If the response doesn't match `Job`'s shape.
-        """
-        body: dict[str, str] = {}
-        if transcription_job_id is not None:
-            body["transcription_job_id"] = transcription_job_id
-        if transcript_text is not None:
-            body["transcript_text"] = transcript_text
-        return self._parse(Job, self._request("POST", "/v1/tag", json=body))
+        return cast(
+            dict[str, Any], self._request("DELETE", f"/v1/transcriptions/{job_id}")
+        )
 
     def usage(self) -> Usage:
         """GET /v1/transcriptions/usage - the caller's transcription minute quota.
 
-        Returns:
-            Usage: ``limit_minutes``/``used_minutes``/``remaining_minutes``.
-
-        Raises:
-            KawaError: If the API returns a non-2xx response.
-            KawaValidationError: If the response doesn't match `Usage`'s shape.
+        Returns ``limit_minutes``/``used_minutes``/``remaining_minutes``.
         """
         return self._parse(Usage, self._request("GET", "/v1/transcriptions/usage"))
 
@@ -425,8 +398,9 @@ class KawaClient:
         if max_attempts > 0:
             logger.warning(
                 "poll() gave up on job %s after %d attempts, still %s, "
-                "no exception was raised, check the last yielded Job's .is_terminal yourself "
-                "(or use transcribe() instead, which raises TimeoutError for this case)",
+                "no exception was raised, check the last yielded Job's "
+                ".is_terminal yourself (or use transcribe() instead, which "
+                "raises TimeoutError for this case)",
                 job_id,
                 max_attempts,
                 last_status,
@@ -467,8 +441,12 @@ class KawaClient:
         """
         job = self.create_transcription(file_path, language=language, metadata=metadata)
         final = job
-        for update in self.poll(job.job_id, interval=interval, max_attempts=max_attempts):
+        for update in self.poll(
+            job.job_id, interval=interval, max_attempts=max_attempts
+        ):
             final = update
         if not final.is_terminal:
-            raise TimeoutError(f"Job {job.job_id} still processing after {max_attempts} checks")
+            raise TimeoutError(
+                f"Job {job.job_id} still processing after {max_attempts} checks"
+            )
         return final
