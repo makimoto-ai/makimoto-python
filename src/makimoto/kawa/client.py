@@ -75,7 +75,7 @@ class KawaClient:
 
         Args:
             api_key (str | None): API key. If omitted, falls back to
-            the environment variable.
+                the environment variable.
             api_url (str): Base URL for the API.
             timeout (float): Default per-request timeout, in seconds.
             session (httpx2.Client | None): Existing HTTP client to reuse.
