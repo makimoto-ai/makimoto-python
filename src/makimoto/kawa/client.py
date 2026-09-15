@@ -264,8 +264,8 @@ class KawaClient:
             )
         return self._parse(Job, body)
 
-    def get_transcription(self, job_id: str) -> Job:
-        """GET /v1/transcriptions/{job_id} - status, and transcript once done.
+    def get_job(self, job_id: str) -> Job:
+        """GET /v1/transcriptions/{job_id} - status, and result once done.
 
         Args:
             job_id (str): The job's identifier.
@@ -415,7 +415,7 @@ class KawaClient:
         """
         last_status = None
         for attempt in range(max_attempts):
-            job = self.get_transcription(job_id)
+            job = self.get_job(job_id)
             last_status = job.status
             yield job
             if job.is_terminal:
@@ -444,7 +444,7 @@ class KawaClient:
         """Submit and poll in one call. Raises on timeout, not on a failed job.
 
         A ``failed`` job is a normal outcome (bad audio, unsupported language),
-        not a malfunction, returned like ``get_transcription()`` would, check
+        not a malfunction, returned like ``get_job()`` would, check
         ``.status``/``.error``. Only exhausting ``max_attempts`` without reaching
         a terminal status raises, since that's genuinely exceptional.
 
