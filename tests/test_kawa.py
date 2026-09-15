@@ -7,7 +7,14 @@ import httpx
 import httpx2
 import pytest
 
-from makimoto.kawa import KawaClient, KawaError, KawaValidationError
+from makimoto.kawa import (
+    KawaClient,
+    KawaError,
+    KawaValidationError,
+    SummaryResult,
+    TagsResult,
+    TranscriptResult,
+)
 
 BASE_URL = "https://api.makimoto.ai"
 
@@ -239,7 +246,7 @@ def test_get_job_success(httpx2_mock):
     job = make_client().get_job("abc")
     assert job.is_terminal
     assert job.type == "transcription"
-    assert job.result is not None
+    assert isinstance(job.result, TranscriptResult)
     assert job.result.full_text == "hello world"
 
 
@@ -293,6 +300,7 @@ def test_get_summary_job_parses_summary_result(httpx2_mock):
     job = make_client().get_job("summary-1")
     assert job.type == "summary"
     assert job.source_job_id == "transcription-1"
+    assert isinstance(job.result, SummaryResult)
     assert job.result.topic == "Billing"
     assert job.result.summary == "Customer was billed twice."
 
@@ -314,6 +322,7 @@ def test_get_tags_job_parses_tags_result(httpx2_mock):
     )
     job = make_client().get_job("tags-1")
     assert job.type == "tags"
+    assert isinstance(job.result, TagsResult)
     assert job.result.tags == {"call_reason": ["billing_issue"]}
 
 
@@ -345,6 +354,7 @@ def test_transcription_result_still_parses_without_a_type_field(httpx2_mock):
     )
     job = make_client().get_job("abc")
     assert job.type is None
+    assert isinstance(job.result, TranscriptResult)
     assert job.result.full_text == "hi there"
 
 
@@ -684,7 +694,7 @@ def test_transcribe_returns_result_on_success(httpx2_mock, tmp_path):
     )
     result = make_client().transcribe(audio_file, interval=0)
     assert result.status == "succeeded"
-    assert result.result is not None
+    assert isinstance(result.result, TranscriptResult)
     assert result.result.full_text == "hi there"
 
 

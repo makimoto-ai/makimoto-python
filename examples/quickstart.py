@@ -19,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 
-from makimoto.kawa import KawaClient, KawaError
+from makimoto.kawa import KawaClient, KawaError, TranscriptResult
 
 # See audio/ATTRIBUTION.md for this file's source and licence terms.
 DEFAULT_AUDIO = Path(__file__).parent / "audio" / "jackhammer.wav"
@@ -51,7 +51,11 @@ def main() -> int:
             print(f"gave up waiting: {exc}")
             return 1
 
-    if result.status != "succeeded" or not result.result:
+    # transcribe() only ever produces a transcription job, so result.result is a
+    # TranscriptResult once succeeded; the isinstance check narrows that for the
+    # type checker (Job.result is also SummaryResult | TagsResult for other job
+    # types) and doubles as the same "didn't succeed" guard as before.
+    if result.status != "succeeded" or not isinstance(result.result, TranscriptResult):
         # A failed job isn't an exception, transcribe() returns it normally.
         print(f"job did not succeed (status: {result.status}), error: {result.error}")
         return 1
