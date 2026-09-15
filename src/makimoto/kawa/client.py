@@ -301,6 +301,79 @@ class KawaClient:
         # than widen this method's own, more useful, return type.
         return cast(dict[str, Any], self._request("DELETE", f"/v1/transcriptions/{job_id}"))
 
+    def create_summary(
+        self,
+        transcription_job_id: str | None = None,
+        *,
+        transcript_text: str | None = None,
+    ) -> Job:
+        """POST /v1/summarize - create a summary job from a transcript.
+
+        Exactly one of ``transcription_job_id`` or ``transcript_text`` must
+        be given, the API rejects zero or both with a 400.
+
+        Args:
+            transcription_job_id (str | None): One of the caller's own
+                transcription jobs, in status ``succeeded``. Mutually
+                exclusive with ``transcript_text``.
+            transcript_text (str | None): A transcript supplied directly,
+                with no transcription job behind it. Mutually exclusive
+                with ``transcription_job_id``.
+
+        Returns:
+            Job: The newly created job (``type="summary"``, typically
+                ``processing``). 
+
+        Raises:
+            KawaError: If the API returns a non-2xx response, including a
+                400 when neither or both of the two arguments are given.
+            KawaValidationError: If the response doesn't match `Job`'s shape.
+        """
+        body: dict[str, str] = {}
+        if transcription_job_id is not None:
+            body["transcription_job_id"] = transcription_job_id
+        if transcript_text is not None:
+            body["transcript_text"] = transcript_text
+        return self._parse(Job, self._request("POST", "/v1/summarize", json=body))
+
+    def create_tags(
+        self,
+        transcription_job_id: str | None = None,
+        *,
+        transcript_text: str | None = None,
+    ) -> Job:
+        """POST /v1/tag - create a tags job from a transcript.
+
+        Exactly one of ``transcription_job_id`` or ``transcript_text`` must be given, 
+        the API rejects zero or both with a 400.
+
+        Note that the tag taxonomy is fixed by the service and isn't configurable 
+        per account. 
+
+        Args:
+            transcription_job_id (str | None): One of the caller's own
+                transcription jobs, in status ``succeeded``. Mutually
+                exclusive with ``transcript_text``.
+            transcript_text (str | None): A transcript supplied directly,
+                with no transcription job behind it. Mutually exclusive
+                with ``transcription_job_id``.
+
+        Returns:
+            Job: The newly created job (``type="tags"``, typically
+                ``processing``). 
+
+        Raises:
+            KawaError: If the API returns a non-2xx response, including a
+                400 when neither or both of the two arguments are given.
+            KawaValidationError: If the response doesn't match `Job`'s shape.
+        """
+        body: dict[str, str] = {}
+        if transcription_job_id is not None:
+            body["transcription_job_id"] = transcription_job_id
+        if transcript_text is not None:
+            body["transcript_text"] = transcript_text
+        return self._parse(Job, self._request("POST", "/v1/tag", json=body))
+
     def usage(self) -> Usage:
         """GET /v1/transcriptions/usage - the caller's transcription minute quota.
 
