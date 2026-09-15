@@ -279,8 +279,13 @@ class KawaClient:
         """
         return self._parse(Job, self._request("GET", f"/v1/transcriptions/{job_id}"))
 
-    def delete_transcription(self, job_id: str) -> dict[str, Any]:
+    def delete_job(self, job_id: str) -> dict[str, Any]:
         """DELETE /v1/transcriptions/{job_id} - remove a job, where supported.
+
+        Works for any job type (transcription, summary, or tags). 
+        
+        Deleting a transcription does not delete summaries or tags derived from it;
+        delete those separately by their own ``job_id``.
 
         Args:
             job_id (str): The job's identifier.
