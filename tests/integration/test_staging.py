@@ -41,19 +41,19 @@ def staging_client():
         yield client
 
 
-def test_list_transcriptions_against_real_staging(staging_client):
+def test_list_jobs_against_real_staging(staging_client):
     # A real contract check: confirms the response actually still matches
     # what TranscriptionPage expects, not just what the mocks assume it does.
-    page = staging_client.list_transcriptions(limit=5)
+    page = staging_client.list_jobs(limit=5)
     assert isinstance(page.transcriptions, list)
     assert page.next_cursor is None or isinstance(page.next_cursor, str)
 
 
-def test_list_transcriptions_rejects_invalid_status(staging_client):
+def test_list_jobs_rejects_invalid_status(staging_client):
     # Confirms the backend still 400s on an unrecognised status rather than
     # silently ignoring it, and that this client surfaces that as KawaError.
     with pytest.raises(KawaError) as exc_info:
-        staging_client.list_transcriptions(status="not-a-real-status")
+        staging_client.list_jobs(status="not-a-real-status")
     assert exc_info.value.status_code == 400
 
 

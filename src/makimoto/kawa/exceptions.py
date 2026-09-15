@@ -7,7 +7,7 @@ class KawaError(RuntimeError):
     """Raised when the API returns a non-2xx response.
 
     ``status_code``, ``body`` and ``headers`` are kept so callers can branch on,
-    for example, a 401 (token missing/expired) versus a 404 (unknown job), and
+    for example, a 401 (API key missing/invalid) versus a 404 (unknown job), and
     inspect response headers (such as ``Retry-After`` on a 429, or the ``Server``
     header that reveals whether a 413 came from the API or a proxy in front of it).
 

@@ -48,21 +48,28 @@ Or skip the transcription entirely and summarise/tag a transcript you already ha
 summary_job = client.create_summary(transcript_text="the customer called about a billing issue...")
 ```
 
-List past jobs, one page at a time, with optional filters (`status`, `language`, `created_after`, `job_id`):
+Also fetch or delete any job (transcription, summary, or tags) directly by its `job_id`:
 
 ```python
-page = client.list_transcriptions(status="succeeded", limit=25)
+job = client.get_job(job.job_id)
+client.delete_job(job.job_id)
+```
+
+List past jobs, one page at a time, with optional filters (`status`, `job_type`, `language`, `created_after`, `job_id`). With no `job_type`, every job type (transcription, summary, and tags) is returned:
+
+```python
+page = client.list_jobs(job_type="summary", status="succeeded", limit=25)
 for job in page.transcriptions:
     print(job.job_id, job.status)
 
 if page.next_cursor:
-    next_page = client.list_transcriptions(cursor=page.next_cursor)
+    next_page = client.list_jobs(cursor=page.next_cursor)
 ```
 
 Or walk every matching job across all pages automatically:
 
 ```python
-for job in client.iter_transcriptions(status="succeeded"):
+for job in client.iter_jobs(job_type="tags", status="succeeded"):
     print(job.job_id)
 ```
 

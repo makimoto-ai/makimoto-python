@@ -130,20 +130,6 @@ class JobError(BaseModel):
     provider_error: dict[str, Any] | None = None
 
 
-class Usage(BaseModel):
-    """The caller's transcription minute quota, as returned by `KawaClient.usage()`.
-
-    Attributes:
-        limit_minutes (float): Total minutes allotted for the billing period.
-        used_minutes (float): Minutes already consumed.
-        remaining_minutes (float): Minutes left before the limit is reached.
-    """
-
-    limit_minutes: float
-    used_minutes: float
-    remaining_minutes: float
-
-
 #: Maps a job's `type` to the model its `result` payload validates against;
 #: `transcription` is also the fallback for a job with no `type` at all, to
 #: keep parsing a plain (pre-`type`) transcription job unchanged.
@@ -166,16 +152,16 @@ class Job(BaseModel):
     The fields below aren't all present on every response;
     each is only sent by specific endpoints:
     - ``received_at`` only on the response to ``create_transcription()``;
-    - ``original_filename``, ``language`` and ``audio_seconds`` only on
-        ``list_transcriptions()``/``iter_transcriptions()`` entries;
-    - ``created_at`` and ``updated_at`` on those too, plus ``type`` on
-        ``get_job()``.
+    - ``original_filename``, ``language``, ``audio_seconds``, ``created_at``
+        and ``updated_at`` only on ``list_jobs()``/``iter_jobs()`` entries.
+
+    ``type`` is present on both ``get_job()`` and ``list_jobs()``/
+    ``iter_jobs()`` entries, always ``"transcription"``, ``"summary"`` or
+    ``"tags"``.
 
     ``language`` here is the list view's own top-level field (whatever was
     requested at submission), distinct from the detected language on
     ``result.language``, which only exists once a job succeeds.
-
-    ``type`` is always ``"transcription"``, ``"summary"`` or ``"tags"``.
 
     Attributes:
         job_id (str): The job's identifier. Poll a summary or tags job by
@@ -193,17 +179,17 @@ class Job(BaseModel):
         error (JobError | None): The failure detail, once ``failed``.
         received_at (str | None): Submission timestamp, only on
             `KawaClient.create_transcription()`'s response.
-        original_filename (str | None): Only on `list_transcriptions()`/
-            `iter_transcriptions()` entries.
+        original_filename (str | None): Only on `list_jobs()`/
+            `iter_jobs()` entries.
         language (str | None): Requested/submission-time language code, only
-            on `list_transcriptions()`/`iter_transcriptions()` entries;
+            on `list_jobs()`/`iter_jobs()` entries;
             distinct from the detected `result.language`.
-        audio_seconds (float | None): Only on `list_transcriptions()`/
-            `iter_transcriptions()` entries.
-        created_at (str | None): Only on `list_transcriptions()`/
-            `iter_transcriptions()` entries.
-        updated_at (str | None): Only on `list_transcriptions()`/
-            `iter_transcriptions()` entries.
+        audio_seconds (float | None): Only on `list_jobs()`/
+            `iter_jobs()` entries.
+        created_at (str | None): Only on `list_jobs()`/
+            `iter_jobs()` entries.
+        updated_at (str | None): Only on `list_jobs()`/
+            `iter_jobs()` entries.
     """
 
     job_id: str
@@ -275,10 +261,10 @@ class Job(BaseModel):
 
 
 class TranscriptionPage(BaseModel):
-    """One page of `KawaClient.list_transcriptions()`. Frozen.
+    """One page of `KawaClient.list_jobs()`. Frozen.
 
     ``next_cursor`` is ``None`` once there's nothing left; pass it back as
-    ``list_transcriptions(cursor=page.next_cursor)`` to fetch the next page.
+    ``list_jobs(cursor=page.next_cursor)`` to fetch the next page.
     """
 
     model_config = ConfigDict(frozen=True)

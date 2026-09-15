@@ -78,21 +78,48 @@ for update in client.poll(job.job_id):
     print(update.status)
 ```
 
-List past jobs, one page at a time, with optional filters (`status`, `language`, `created_after`, `job_id`):
+Once a transcription has succeeded, summarise or tag it by its `job_id`. Both return a new job, fetched or polled the same way as a transcription, through its own `job_id`, not the source transcription's:
 
 ```python
-page = client.list_transcriptions(status="succeeded", limit=25)
+summary_job = client.create_summary(job.job_id)
+for update in client.poll(summary_job.job_id):
+    print(update.status)
+print(update.result.topic, update.result.summary)
+
+tags_job = client.create_tags(job.job_id)
+for update in client.poll(tags_job.job_id):
+    print(update.status)
+print(update.result.tags)
+```
+
+Or skip the transcription entirely and summarise/tag a transcript you already have, with `transcript_text` instead of a job id (exactly one of the two must be given):
+
+```python
+summary_job = client.create_summary(transcript_text="the customer called about a billing issue...")
+```
+
+Fetch or delete any job (transcription, summary, or tags) by its `job_id`:
+
+```python
+job = client.get_job(job.job_id)
+client.delete_job(job.job_id)
+```
+
+List past jobs, one page at a time, with optional filters (`status`, `job_type`, `language`, `created_after`, `job_id`). With no `job_type`, every job type (transcription, summary, and tags) is returned:
+
+```python
+page = client.list_jobs(job_type="summary", status="succeeded", limit=25)
 for job in page.transcriptions:
     print(job.job_id, job.status)
 
 if page.next_cursor:
-    next_page = client.list_transcriptions(cursor=page.next_cursor)
+    next_page = client.list_jobs(cursor=page.next_cursor)
 ```
 
 Or walk every matching job across all pages automatically:
 
 ```python
-for job in client.iter_transcriptions(status="succeeded"):
+for job in client.iter_jobs(status="succeeded"):
     print(job.job_id)
 ```
 

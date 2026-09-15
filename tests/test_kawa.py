@@ -43,23 +43,23 @@ def test_context_manager_closes_on_exit():
     assert client._session.is_closed is True
 
 
-# -- list_transcriptions ------------------------------------------------------------- #
+# -- list_jobs ------------------------------------------------------------- #
 
 
-def test_list_transcriptions_success(httpx2_mock):
+def test_list_jobs_success(httpx2_mock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         return_value=httpx.Response(
             200, json={"transcriptions": [{"job_id": "abc", "status": "succeeded"}]}
         )
     )
-    page = make_client().list_transcriptions()
+    page = make_client().list_jobs()
     assert len(page.transcriptions) == 1
     assert page.transcriptions[0].job_id == "abc"
     assert page.transcriptions[0].status == "succeeded"
     assert page.next_cursor is None
 
 
-def test_list_transcriptions_captures_all_list_only_fields(httpx2_mock):
+def test_list_jobs_captures_all_list_only_fields(httpx2_mock):
     # These fields (confirmed present in real API responses) were previously
     # silently dropped by pydantic since Job didn't declare them at all.
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
@@ -80,7 +80,7 @@ def test_list_transcriptions_captures_all_list_only_fields(httpx2_mock):
             },
         )
     )
-    job = make_client().list_transcriptions().transcriptions[0]
+    job = make_client().list_jobs().transcriptions[0]
     assert job.original_filename == "jackhammer.wav"
     assert job.language == "es"
     assert job.audio_seconds == 12.5
@@ -88,7 +88,7 @@ def test_list_transcriptions_captures_all_list_only_fields(httpx2_mock):
     assert job.updated_at == "2026-08-26T02:17:40.398Z"
 
 
-def test_list_transcriptions_exposes_next_cursor(httpx2_mock):
+def test_list_jobs_exposes_next_cursor(httpx2_mock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         return_value=httpx.Response(
             200,
@@ -98,18 +98,19 @@ def test_list_transcriptions_exposes_next_cursor(httpx2_mock):
             },
         )
     )
-    page = make_client().list_transcriptions()
+    page = make_client().list_jobs()
     assert page.next_cursor == "opaque-cursor-value"
 
 
-def test_list_transcriptions_sends_pagination_and_filters(httpx2_mock):
+def test_list_jobs_sends_pagination_and_filters(httpx2_mock):
     route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         return_value=httpx.Response(200, json={"transcriptions": []})
     )
-    make_client().list_transcriptions(
+    make_client().list_jobs(
         limit=5,
         cursor="prev-cursor",
         status="succeeded",
+        job_type="summary",
         language="en",
         created_after="2026-01-01T00:00:00Z",
         job_id="11111111-1111-1111-1111-111111111111",
@@ -118,24 +119,37 @@ def test_list_transcriptions_sends_pagination_and_filters(httpx2_mock):
     assert sent["limit"] == "5"
     assert sent["cursor"] == "prev-cursor"
     assert sent["status"] == "succeeded"
+    assert sent["type"] == "summary"
     assert sent["language"] == "en"
     assert sent["created_after"] == "2026-01-01T00:00:00Z"
     assert sent["job_id"] == "11111111-1111-1111-1111-111111111111"
 
 
-def test_list_transcriptions_omits_unset_params(httpx2_mock):
+def test_list_jobs_filters_by_job_type(httpx2_mock):
+    # job_type is sent to the API as `type`, its own query param name.
+    route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(
+            200, json={"transcriptions": [{"job_id": "s1", "type": "summary"}]}
+        )
+    )
+    page = make_client().list_jobs(job_type="summary")
+    assert route.calls.last.request.url.params["type"] == "summary"
+    assert page.transcriptions[0].type == "summary"
+
+
+def test_list_jobs_omits_unset_params(httpx2_mock):
     # None-valued args must not become literal "None" query params.
     route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         return_value=httpx.Response(200, json={"transcriptions": []})
     )
-    make_client().list_transcriptions()
+    make_client().list_jobs()
     assert dict(route.calls.last.request.url.params) == {}
 
 
-# -- iter_transcriptions ------------------------------------------------------------- #
+# -- iter_jobs ------------------------------------------------------------- #
 
 
-def test_iter_transcriptions_walks_every_page(httpx2_mock):
+def test_iter_jobs_walks_every_page(httpx2_mock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         side_effect=[
             httpx.Response(
@@ -154,22 +168,22 @@ def test_iter_transcriptions_walks_every_page(httpx2_mock):
             ),
         ]
     )
-    job_ids = [job.job_id for job in make_client().iter_transcriptions()]
+    job_ids = [job.job_id for job in make_client().iter_jobs()]
     assert job_ids == ["a", "b"]
 
 
-def test_iter_transcriptions_stops_when_first_page_has_no_cursor(httpx2_mock):
+def test_iter_jobs_stops_when_first_page_has_no_cursor(httpx2_mock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         return_value=httpx.Response(
             200,
             json={"transcriptions": [{"job_id": "solo", "status": "succeeded"}]},
         )
     )
-    job_ids = [job.job_id for job in make_client().iter_transcriptions()]
+    job_ids = [job.job_id for job in make_client().iter_jobs()]
     assert job_ids == ["solo"]
 
 
-def test_iter_transcriptions_reuses_filters_and_page_size_on_every_page(httpx2_mock):
+def test_iter_jobs_reuses_filters_and_page_size_on_every_page(httpx2_mock):
     route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         side_effect=[
             httpx.Response(
@@ -179,11 +193,19 @@ def test_iter_transcriptions_reuses_filters_and_page_size_on_every_page(httpx2_m
             httpx.Response(200, json={"transcriptions": [{"job_id": "b"}]}),
         ]
     )
-    list(make_client().iter_transcriptions(page_size=1, status="succeeded"))
+    list(make_client().iter_jobs(page_size=1, status="succeeded"))
     assert len(route.calls) == 2
     first, second = (dict(call.request.url.params) for call in route.calls)
     assert first == {"limit": "1", "status": "succeeded"}
     assert second == {"limit": "1", "status": "succeeded", "cursor": "page-2"}
+
+
+def test_iter_jobs_passes_job_type_filter_on_every_page(httpx2_mock):
+    route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(200, json={"transcriptions": [{"job_id": "a"}]})
+    )
+    list(make_client().iter_jobs(job_type="tags"))
+    assert route.calls.last.request.url.params["type"] == "tags"
 
 
 # -- get_job --------------------------------------------------------------- #
@@ -495,26 +517,6 @@ def test_create_summary_raises_when_both_sources_given(httpx2_mock):
     assert exc_info.value.status_code == 400
 
 
-# -- usage ------------------------------------------------------------------------- #
-
-
-def test_usage_success(httpx2_mock):
-    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/usage").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "limit_minutes": 1000,
-                "used_minutes": 12.5,
-                "remaining_minutes": 987.5,
-            },
-        )
-    )
-    usage = make_client().usage()
-    assert usage.limit_minutes == 1000
-    assert usage.used_minutes == 12.5
-    assert usage.remaining_minutes == 987.5
-
-
 # -- error handling ------------------------------------------------------------------ #
 
 
@@ -546,7 +548,7 @@ def test_connection_error_raises_httpx2_connect_error(httpx2_mock):
         side_effect=httpx2.ConnectError("boom")
     )
     with pytest.raises(httpx2.ConnectError):
-        make_client().list_transcriptions()
+        make_client().list_jobs()
 
 
 # -- transport behaviour (httpx2-specific) ------------------------------------------- #
@@ -563,7 +565,7 @@ def test_follows_redirects(httpx2_mock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/").mock(
         return_value=httpx.Response(200, json={"transcriptions": []})
     )
-    page = make_client().list_transcriptions()
+    page = make_client().list_jobs()
     assert page.transcriptions == []
 
 
@@ -571,7 +573,7 @@ def test_sends_correct_auth_header(httpx2_mock):
     route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         return_value=httpx.Response(200, json={"transcriptions": []})
     )
-    make_client(api_key="secret-key").list_transcriptions()
+    make_client(api_key="secret-key").list_jobs()
     assert route.calls.last.request.headers["authorization"] == "Bearer secret-key"
 
 
@@ -580,7 +582,7 @@ def test_headers_raises_when_api_key_empty(monkeypatch):
     # whatever MAKIMOTO_API_KEY happens to be set to on the host.
     monkeypatch.delenv("MAKIMOTO_API_KEY", raising=False)
     with pytest.raises(ValueError):
-        make_client(api_key="").list_transcriptions()
+        make_client(api_key="").list_jobs()
 
 
 # -- poll ---------------------------------------------------------------------------- #
@@ -730,7 +732,7 @@ def test_explicit_api_key_beats_env_var(monkeypatch, httpx2_mock):
     route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         return_value=httpx.Response(200, json={"transcriptions": []})
     )
-    KawaClient(api_key="explicit-key", api_url=BASE_URL).list_transcriptions()
+    KawaClient(api_key="explicit-key", api_url=BASE_URL).list_jobs()
     assert route.calls.last.request.headers["authorization"] == "Bearer explicit-key"
 
 
@@ -739,7 +741,7 @@ def test_falls_back_to_env_var(monkeypatch, httpx2_mock):
     route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions").mock(
         return_value=httpx.Response(200, json={"transcriptions": []})
     )
-    KawaClient(api_url=BASE_URL).list_transcriptions()
+    KawaClient(api_url=BASE_URL).list_jobs()
     assert route.calls.last.request.headers["authorization"] == "Bearer env-key"
 
 
@@ -747,4 +749,4 @@ def test_raises_when_no_credential_available(monkeypatch):
     monkeypatch.delenv("MAKIMOTO_API_KEY", raising=False)
     client = KawaClient(api_url=BASE_URL)
     with pytest.raises(ValueError):
-        client.list_transcriptions()
+        client.list_jobs()

@@ -13,7 +13,7 @@ import httpx2
 from pydantic import BaseModel, ValidationError
 
 from .exceptions import KawaError, KawaValidationError
-from .models import Job, TranscriptionPage, Usage
+from .models import Job, TranscriptionPage
 
 DEFAULT_API_URL = "https://api.makimoto.ai"
 
@@ -206,12 +206,13 @@ class KawaClient:
 
     # -- endpoints ---------------------------------------------------------- #
 
-    def list_transcriptions(
+    def list_jobs(
         self,
         *,
         limit: int | None = None,
         cursor: str | None = None,
         status: str | None = None,
+        job_type: str | None = None,
         language: str | None = None,
         created_after: str | None = None,
         job_id: str | None = None,
@@ -221,19 +222,23 @@ class KawaClient:
         Keyset-paginated: ``limit`` defaults to 10 server-side and is capped
         at 100; pass ``cursor=page.next_cursor`` to fetch the next page,
         ``next_cursor`` is ``None`` once there's nothing left. ``status``,
+        ``job_type`` (``"transcription"``, ``"summary"``, or ``"tags"``),
         ``language``, ``created_after`` (an ISO 8601 timestamp), and
         ``job_id`` (a UUID) are optional filters, composed with AND where
-        more than one is given.
+        more than one is given. With no ``job_type``, every job type is
+        returned, the API applies no implicit filter of its own.
 
-        Every argument is passed straight through as a query parameter, an
-        invalid value (e.g. an unrecognised ``status``) raises `KawaError`
-        from the backend rather than being validated here, that keeps this
-        client from carrying its own copy of rules the API already owns.
+        Every argument is passed straight through as a query parameter (
+        ``job_type`` as ``type``), an invalid value (e.g. an unrecognised
+        ``status``) raises `KawaError` from the backend rather than being
+        validated here, that keeps this client from carrying its own copy
+        of rules the API already owns.
         """
         params = {
             "limit": limit,
             "cursor": cursor,
             "status": status,
+            "type": job_type,
             "language": language,
             "created_after": created_after,
             "job_id": job_id,
@@ -242,29 +247,31 @@ class KawaClient:
         body = self._request("GET", "/v1/transcriptions", params=query)
         return self._parse(TranscriptionPage, body)
 
-    def iter_transcriptions(
+    def iter_jobs(
         self,
         *,
         page_size: int | None = None,
         status: str | None = None,
+        job_type: str | None = None,
         language: str | None = None,
         created_after: str | None = None,
         job_id: str | None = None,
     ) -> Iterator[Job]:
         """Yield every matching job, fetching further pages automatically.
 
-        A thin wrapper around `list_transcriptions()` for the common case of
-        wanting all matching jobs rather than one page at a time. `page_size`
+        A thin wrapper around `list_jobs()` for the common case of wanting
+        all matching jobs rather than one page at a time. `page_size`
         controls the underlying per-request `limit` (server default 10, capped
-        at 100), not how many jobs this yields overall, use `list_transcriptions`
+        at 100), not how many jobs this yields overall, use `list_jobs`
         directly if you need explicit control over paging instead.
         """
         cursor: str | None = None
         while True:
-            page = self.list_transcriptions(
+            page = self.list_jobs(
                 limit=page_size,
                 cursor=cursor,
                 status=status,
+                job_type=job_type,
                 language=language,
                 created_after=created_after,
                 job_id=job_id,
@@ -424,13 +431,6 @@ class KawaClient:
         if transcript_text is not None:
             body["transcript_text"] = transcript_text
         return self._parse(Job, self._request("POST", "/v1/tag", json=body))
-
-    def usage(self) -> Usage:
-        """GET /v1/transcriptions/usage - the caller's transcription minute quota.
-
-        Returns ``limit_minutes``/``used_minutes``/``remaining_minutes``.
-        """
-        return self._parse(Usage, self._request("GET", "/v1/transcriptions/usage"))
 
     def poll(
         self,

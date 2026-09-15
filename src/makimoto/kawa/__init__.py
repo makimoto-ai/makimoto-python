@@ -39,7 +39,6 @@ from .models import (
     TagsResult,
     TranscriptionPage,
     TranscriptResult,
-    Usage,
 )
 
 __all__ = [
@@ -55,5 +54,4 @@ __all__ = [
     "TagsResult",
     "TranscriptResult",
     "TranscriptionPage",
-    "Usage",
 ]
