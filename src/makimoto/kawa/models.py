@@ -78,6 +78,43 @@ class TranscriptResult(BaseModel):
         return " ".join(s.text for s in self.segments).strip()
 
 
+class SummaryResult(BaseModel):
+    """The ``result`` payload for a ``summary`` job. Frozen.
+
+    Attributes:
+        topic (str | None): Short label for what the call was about, `None`
+            if the model produced none.
+        summary (str): Prose summary of the conversation.
+        meta_data (dict[str, Any] | None): Generation metadata reported by
+            the provider (model, batch size, timing), passed through unread.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    topic: str | None = None
+    summary: str = ""
+    meta_data: dict[str, Any] | None = None
+
+
+class TagsResult(BaseModel):
+    """The ``result`` payload for a ``tags`` job. Frozen.
+
+    The tag taxonomy is fixed by the service and isn't configurable per
+    account.
+
+    Attributes:
+        tags (dict[str, list[str]]): Tag category to selected values, e.g.
+            ``{"call_reason": ["billing_issue"]}``.
+        meta_data (dict[str, Any] | None): Generation metadata reported by
+            the provider, passed through unread.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    tags: dict[str, list[str]] = Field(default_factory=dict)
+    meta_data: dict[str, Any] | None = None
+
+
 class JobError(BaseModel):
     """The ``error`` payload returned once a job fails.
 
@@ -107,23 +144,46 @@ class Usage(BaseModel):
     remaining_minutes: float
 
 
-class Job(BaseModel):
-    """A transcription job, in whatever state the API last reported.
+#: Maps a job's `type` to the model its `result` payload validates against;
+#: `transcription` is also the fallback for a job with no `type` at all, to
+#: keep parsing a plain (pre-`type`) transcription job unchanged.
+_RESULT_MODEL_BY_TYPE: dict[str, type[BaseModel]] = {
+    "transcription": TranscriptResult,
+    "summary": SummaryResult,
+    "tags": TagsResult,
+}
 
-    ``result`` is only present once ``succeeded``; ``error`` only once
-    ``failed``.
+
+class Job(BaseModel):
+    """A job, in whatever state the API last reported.
+
+    Covers all three job types the API produces: a transcription itself,
+    plus a summary or tags job created from one via `KawaClient.create_summary()`
+    / `KawaClient.create_tags()`. ``type`` says which, and therefore which
+    shape ``result`` takes; ``result`` is only present once ``succeeded``,
+    ``error`` only once ``failed``.
 
     Attributes:
-        job_id (str): The job's identifier.
+        job_id (str): The job's identifier. Poll a summary or tags job by
+            its own ``job_id``, not the source transcription's.
+        type (str | None): ``"transcription"``, ``"summary"``, or
+            ``"tags"``. `None` on a response that predates this field, treated
+            the same as ``"transcription"`` for parsing `result`.
         status (str): Current lifecycle status, e.g. ``"queued"``,
             ``"processing"``, ``"succeeded"``, or ``"failed"``.
-        result (TranscriptResult | None): The transcript, once ``succeeded``.
+        source_job_id (str | None): The transcription this job was derived
+            from, for a ``summary`` or ``tags`` job. `None` for a
+            transcription itself, which has no source.
+        result (TranscriptResult | SummaryResult | TagsResult | None): The
+            job's result, once ``succeeded``; its shape follows ``type``.
         error (JobError | None): The failure detail, once ``failed``.
     """
 
     job_id: str
+    type: str | None = None
     status: str = "unknown"
-    result: TranscriptResult | None = None
+    source_job_id: str | None = None
+    result: TranscriptResult | SummaryResult | TagsResult | None = None
     error: JobError | None = None
 
     @model_validator(mode="before")
@@ -143,6 +203,30 @@ class Job(BaseModel):
         """
         if isinstance(data, dict) and not data.get("job_id") and data.get("id"):
             data = {**data, "job_id": data["id"]}
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def _parse_result_by_type(cls, data: Any) -> Any:
+        """Validate a dict `result` against the model matching `type`.
+
+        Left to pydantic's own union handling, a `SummaryResult` or
+        `TagsResult` payload would still validate as a `TranscriptResult`
+        (every one of its fields has a default, and extra keys are ignored
+        by default), silently producing an empty transcript instead of the
+        actual summary or tags. Picking the model from `type` up front
+        avoids that.
+
+        Args:
+            data (Any): The raw input being validated into this model.
+
+        Returns:
+            Any: ``data``, with a dict ``result`` replaced by the parsed
+                model instance for ``type``; otherwise unchanged.
+        """
+        if isinstance(data, dict) and isinstance(data.get("result"), dict):
+            model = _RESULT_MODEL_BY_TYPE.get(data.get("type") or "transcription", TranscriptResult)
+            data = {**data, "result": model.model_validate(data["result"])}
         return data
 
     @property
