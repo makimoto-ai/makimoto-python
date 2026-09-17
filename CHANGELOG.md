@@ -4,6 +4,29 @@ All notable changes to `makimoto-kawa` are documented here. Format loosely follo
 
 <!-- version list -->
 
+## v0.2.1 (2026-09-17)
+
+### Bug Fixes
+
+- Satisfy ruff lint in the 0.2.0 demo notebook
+  ([#14](https://github.com/makimoto-ai/makimoto-python/pull/14),
+  [`9be7f11`](https://github.com/makimoto-ai/makimoto-python/commit/9be7f11449be49349c273c31dd7b0346d78eb5fb))
+
+### Chores
+
+- Updated README.md - Makimoto Website GA4 Tracking
+  ([#13](https://github.com/makimoto-ai/makimoto-python/pull/13),
+  [`3068c6a`](https://github.com/makimoto-ai/makimoto-python/commit/3068c6a048b7ba1d85526b21074954a8aa11f69e))
+
+### Documentation
+
+- Add jupyter notebook for 0.2.0 ([#14](https://github.com/makimoto-ai/makimoto-python/pull/14),
+  [`9be7f11`](https://github.com/makimoto-ai/makimoto-python/commit/9be7f11449be49349c273c31dd7b0346d78eb5fb))
+
+- Fixed docstring indentation ([#12](https://github.com/makimoto-ai/makimoto-python/pull/12),
+  [`192fbc7`](https://github.com/makimoto-ai/makimoto-python/commit/192fbc75c36ca8bbeff3955475450a27f86d9f05))
+
+
 ## v0.2.0 (2026-09-15)
 
 ### Bug Fixes
