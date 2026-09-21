@@ -4,6 +4,57 @@ All notable changes to `makimoto-kawa` are documented here. Format loosely follo
 
 <!-- version list -->
 
+## v0.3.0 (2026-09-21)
+
+### Bug Fixes
+
+- Satisfy ruff lint in the 0.2.0 demo notebook
+  ([#14](https://github.com/makimoto-ai/makimoto-python/pull/14),
+  [`9be7f11`](https://github.com/makimoto-ai/makimoto-python/commit/9be7f11449be49349c273c31dd7b0346d78eb5fb))
+
+- Update init file to include async client
+  ([#16](https://github.com/makimoto-ai/makimoto-python/pull/16),
+  [`41a8533`](https://github.com/makimoto-ai/makimoto-python/commit/41a8533d5c332c9159e0f592d32026e76eb0fc6d))
+
+### Chores
+
+- Fix formatting ([#16](https://github.com/makimoto-ai/makimoto-python/pull/16),
+  [`41a8533`](https://github.com/makimoto-ai/makimoto-python/commit/41a8533d5c332c9159e0f592d32026e76eb0fc6d))
+
+- Updated README.md - Makimoto Website GA4 Tracking
+  ([#13](https://github.com/makimoto-ai/makimoto-python/pull/13),
+  [`3068c6a`](https://github.com/makimoto-ai/makimoto-python/commit/3068c6a048b7ba1d85526b21074954a8aa11f69e))
+
+### Documentation
+
+- Add jupyter notebook for 0.2.0 ([#14](https://github.com/makimoto-ai/makimoto-python/pull/14),
+  [`9be7f11`](https://github.com/makimoto-ai/makimoto-python/commit/9be7f11449be49349c273c31dd7b0346d78eb5fb))
+
+- Fixed docstring indentation ([#12](https://github.com/makimoto-ai/makimoto-python/pull/12),
+  [`192fbc7`](https://github.com/makimoto-ai/makimoto-python/commit/192fbc75c36ca8bbeff3955475450a27f86d9f05))
+
+- Update docs ([#16](https://github.com/makimoto-ai/makimoto-python/pull/16),
+  [`41a8533`](https://github.com/makimoto-ai/makimoto-python/commit/41a8533d5c332c9159e0f592d32026e76eb0fc6d))
+
+### Features
+
+- Added async client ([#16](https://github.com/makimoto-ai/makimoto-python/pull/16),
+  [`41a8533`](https://github.com/makimoto-ai/makimoto-python/commit/41a8533d5c332c9159e0f592d32026e76eb0fc6d))
+
+- Added quickstart for async ([#16](https://github.com/makimoto-ai/makimoto-python/pull/16),
+  [`41a8533`](https://github.com/makimoto-ai/makimoto-python/commit/41a8533d5c332c9159e0f592d32026e76eb0fc6d))
+
+### Refactoring
+
+- Created base class for client ([#16](https://github.com/makimoto-ai/makimoto-python/pull/16),
+  [`41a8533`](https://github.com/makimoto-ai/makimoto-python/commit/41a8533d5c332c9159e0f592d32026e76eb0fc6d))
+
+### Testing
+
+- Update tests ([#16](https://github.com/makimoto-ai/makimoto-python/pull/16),
+  [`41a8533`](https://github.com/makimoto-ai/makimoto-python/commit/41a8533d5c332c9159e0f592d32026e76eb0fc6d))
+
+
 ## v0.2.0 (2026-09-15)
 
 ### Bug Fixes
