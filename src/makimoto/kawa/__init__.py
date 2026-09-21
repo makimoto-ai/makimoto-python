@@ -26,8 +26,17 @@ Example
 >>> job = client.transcribe("call.mp3", language="en")
 >>> if job.status == "succeeded":
 ...     print(job.result.full_text)
+
+Or, inside an existing event loop, `AsyncKawaClient` instead:
+
+>>> from makimoto.kawa import AsyncKawaClient
+>>> async with AsyncKawaClient(api_key="<your api key>") as client:
+...     job = await client.transcribe("call.mp3", language="en")
+...     if job.status == "succeeded":
+...         print(job.result.full_text)
 """
 
+from .async_client import AsyncKawaClient
 from .client import DEFAULT_API_URL, KawaClient
 from .exceptions import KawaError, KawaValidationError
 from .models import (
@@ -44,6 +53,7 @@ from .models import (
 __all__ = [
     "DEFAULT_API_URL",
     "TERMINAL_STATUSES",
+    "AsyncKawaClient",
     "Job",
     "JobError",
     "KawaClient",
