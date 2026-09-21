@@ -43,6 +43,7 @@ Changelog = "https://github.com/makimoto-ai/makimoto-python/blob/main/CHANGELOG.
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
+    "pytest-asyncio>=0.24",
     "pytest-cov>=5",
     "pytest-httpx2>=1.0",
     "httpx>=0.25.0",
@@ -100,6 +101,9 @@ ignore = ["PYI034"]
 markers = [
     "integration: hits a real deployed API (staging), not mocked; skips itself when STAGING_API_URL/STAGING_API_KEY aren't set",
 ]
+# "auto" so an `async def test_...` runs as a coroutine without needing its
+# own `@pytest.mark.asyncio` on every single test.
+asyncio_mode = "auto"
 
 [tool.coverage.run]
 source = ["makimoto"]
