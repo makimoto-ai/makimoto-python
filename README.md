@@ -140,11 +140,13 @@ with kawa.KawaClient(api_key="<your api key>") as client:
 import asyncio
 from makimoto import kawa
 
+
 async def main():
     async with kawa.AsyncKawaClient(api_key="<your api key>") as client:
         job = await client.transcribe("call.mp3", language="en")
         if job.status == "succeeded":
             print(job.result.full_text)
+
 
 asyncio.run(main())
 ```
