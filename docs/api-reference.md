@@ -15,6 +15,11 @@
       show_root_heading: true
       heading_level: 3
 
+::: makimoto.kawa.AsyncKawaClient
+    options:
+      show_root_heading: true
+      heading_level: 3
+
 ## Models
 
 ::: makimoto.kawa.Job

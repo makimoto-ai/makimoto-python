@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import mimetypes
 import os
-import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, cast
 
@@ -15,20 +15,20 @@ from ._base import DEFAULT_API_URL, _BaseKawaClient
 from .exceptions import KawaError
 from .models import Job, TranscriptionPage
 
-# Raw request/response logging already comes from httpx2's own "httpx2"
-# logger (enable it directly if that's all you need). This logger is only
-# for SDK-level events httpx2 can't see: credential source, giving up on a
-# poll. Never logs the credential value itself.
-#
-# NullHandler prevents Python's default handler from printing WARNING+
-# records to stderr when consumers haven't configured logging.
-# Libraries emit; applications configure handlers.
+# See client.py's own logger comment: same rationale, own logger (own
+# NullHandler) since this is a sibling module, not a parent/child of
+# "makimoto.kawa.client", so its NullHandler wouldn't be found via
+# propagation.
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 
-class KawaClient(_BaseKawaClient):
-    """Minimal client for the Makimoto Kawa transcription API.
+class AsyncKawaClient(_BaseKawaClient):
+    """Async counterpart of `KawaClient`, same API, `httpx2.AsyncClient` transport.
+
+    Every endpoint method here is `async def` and awaits its request; use
+    this instead of `KawaClient` inside an existing event loop (an async
+    web app, an async worker) rather than blocking it with sync I/O.
 
     Credentials: pass ``api_key`` explicitly, or omit it and set the
     ``MAKIMOTO_API_KEY`` environment variable instead, the explicit
@@ -38,10 +38,10 @@ class KawaClient(_BaseKawaClient):
     not the short-lived dashboard login JWT, the transcription endpoints
     this client calls no longer accept that.
 
-    Transport: uses ``httpx2.Client`` internally, one instance per
-    ``KawaClient``, reused across calls, with ``follow_redirects=True`` set
-    explicitly (not the library default, kept to match this client's
-    previous ``requests``-based behaviour).
+    Transport: uses ``httpx2.AsyncClient`` internally, one instance per
+    ``AsyncKawaClient``, reused across calls, with ``follow_redirects=True``
+    set explicitly (not the library default, kept to match `KawaClient`'s
+    behaviour).
 
     Attributes:
         api_key (str): API key, stripped of surrounding whitespace.
@@ -54,9 +54,9 @@ class KawaClient(_BaseKawaClient):
             before any request has been made.
 
     Examples:
-        >>> client = KawaClient(api_key="<your api key>")
-        >>> job = client.transcribe("call.mp3", language="en")
-        >>> print(job.result.full_text)
+        >>> async with AsyncKawaClient(api_key="<your api key>") as client:
+        ...     job = await client.transcribe("call.mp3", language="en")
+        ...     print(job.result.full_text)
     """
 
     def __init__(
@@ -65,7 +65,7 @@ class KawaClient(_BaseKawaClient):
         api_url: str = DEFAULT_API_URL,
         *,
         timeout: float = 30.0,
-        session: httpx2.Client | None = None,
+        session: httpx2.AsyncClient | None = None,
     ):
         """Initialise the client.
 
@@ -74,8 +74,8 @@ class KawaClient(_BaseKawaClient):
                 the environment variable.
             api_url (str): Base URL for the API.
             timeout (float): Default per-request timeout, in seconds.
-            session (httpx2.Client | None): Existing HTTP client to reuse.
-                If omitted, a new one is created with
+            session (httpx2.AsyncClient | None): Existing HTTP client to
+                reuse. If omitted, a new one is created with
                 ``follow_redirects=True``.
         """
         if api_key is None:
@@ -85,27 +85,28 @@ class KawaClient(_BaseKawaClient):
                 "found" if api_key else "not set",
             )
         super().__init__(api_key, api_url, timeout)
-        self._session = session or httpx2.Client(follow_redirects=True)
+        self._session = session or httpx2.AsyncClient(follow_redirects=True)
 
-    def close(self) -> None:
+    async def aclose(self) -> None:
         """Close the underlying HTTP session, releasing pooled connections.
 
-        `KawaClient` holds one persistent `httpx2.Client` for its whole
-        lifetime. Closing it doesn't matter for a short script, the process
-        exit cleans it up either way, but does matter for a long-running
-        app that keeps a client around, a server, a worker, and so on.
+        `AsyncKawaClient` holds one persistent `httpx2.AsyncClient` for its
+        whole lifetime. Closing it doesn't matter for a short script, the
+        process exit cleans it up either way, but does matter for a
+        long-running app that keeps a client around, a server, a worker,
+        and so on.
         """
-        self._session.close()
+        await self._session.aclose()
 
-    def __enter__(self) -> KawaClient:
+    async def __aenter__(self) -> AsyncKawaClient:
         return self
 
-    def __exit__(self, *exc_info: object) -> None:
-        self.close()
+    async def __aexit__(self, *exc_info: object) -> None:
+        await self.aclose()
 
     # -- internals ---------------------------------------------------------- #
 
-    def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+    async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         """The one place every HTTP call goes through.
 
         Records `last_status`/`last_headers` for debugging, parses the JSON
@@ -115,7 +116,7 @@ class KawaClient(_BaseKawaClient):
         Args:
             method (str): HTTP method, e.g. ``"GET"`` or ``"POST"``.
             path (str): Request path, appended to ``api_url``.
-            **kwargs (Any): Forwarded to ``httpx2.Client.request``; a
+            **kwargs (Any): Forwarded to ``httpx2.AsyncClient.request``; a
                 ``timeout`` key overrides ``self.timeout`` for this call.
 
         Returns:
@@ -126,7 +127,7 @@ class KawaClient(_BaseKawaClient):
         """
         # Upload streams the file, so allow a longer timeout for POST.
         timeout = kwargs.pop("timeout", self.timeout)
-        response = self._session.request(
+        response = await self._session.request(
             method, self._url(path), headers=self._headers(), timeout=timeout, **kwargs
         )
         self.last_status = response.status_code
@@ -147,7 +148,7 @@ class KawaClient(_BaseKawaClient):
 
     # -- endpoints ---------------------------------------------------------- #
 
-    def list_jobs(
+    async def list_jobs(
         self,
         *,
         limit: int | None = None,
@@ -185,10 +186,10 @@ class KawaClient(_BaseKawaClient):
             "job_id": job_id,
         }
         query = {k: v for k, v in params.items() if v is not None}
-        body = self._request("GET", "/v1/transcriptions", params=query)
+        body = await self._request("GET", "/v1/transcriptions", params=query)
         return self._parse(TranscriptionPage, body)
 
-    def iter_jobs(
+    async def iter_jobs(
         self,
         *,
         page_size: int | None = None,
@@ -197,7 +198,7 @@ class KawaClient(_BaseKawaClient):
         language: str | None = None,
         created_after: str | None = None,
         job_id: str | None = None,
-    ) -> Iterator[Job]:
+    ) -> AsyncIterator[Job]:
         """Yield every matching job, fetching further pages automatically.
 
         A thin wrapper around `list_jobs()` for the common case of wanting
@@ -208,7 +209,7 @@ class KawaClient(_BaseKawaClient):
         """
         cursor: str | None = None
         while True:
-            page = self.list_jobs(
+            page = await self.list_jobs(
                 limit=page_size,
                 cursor=cursor,
                 status=status,
@@ -217,12 +218,13 @@ class KawaClient(_BaseKawaClient):
                 created_after=created_after,
                 job_id=job_id,
             )
-            yield from page.transcriptions
+            for job in page.transcriptions:
+                yield job
             if page.next_cursor is None:
                 return
             cursor = page.next_cursor
 
-    def create_transcription(
+    async def create_transcription(
         self,
         file_path: str | Path,
         *,
@@ -230,6 +232,12 @@ class KawaClient(_BaseKawaClient):
         metadata: dict[str, Any] | None = None,
     ) -> Job:
         """POST /v1/transcriptions - submit a recording as multipart form-data.
+
+        Reads `file_path` with a plain, blocking `open()`, there's no async
+        file I/O here, so a large file on a slow disk will still occupy the
+        event loop for that read. Fine for the typical case (an audio file
+        read from local/network storage); if that's a problem for your
+        workload, read the file yourself off-thread and adapt this method.
 
         Args:
             file_path (str | Path): Path to the audio/video file to upload.
@@ -252,7 +260,7 @@ class KawaClient(_BaseKawaClient):
             data["metadata"] = json.dumps(metadata, separators=(",", ":"))
         mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         with path.open("rb") as handle:
-            body = self._request(
+            body = await self._request(
                 "POST",
                 "/v1/transcriptions",
                 files={"file": (path.name, handle, mime)},
@@ -261,7 +269,7 @@ class KawaClient(_BaseKawaClient):
             )
         return self._parse(Job, body)
 
-    def get_job(self, job_id: str) -> Job:
+    async def get_job(self, job_id: str) -> Job:
         """GET /v1/transcriptions/{job_id} - status, and result once done.
 
         Args:
@@ -274,9 +282,10 @@ class KawaClient(_BaseKawaClient):
             KawaError: If the API returns a non-2xx response.
             KawaValidationError: If the response doesn't match `Job`'s shape.
         """
-        return self._parse(Job, self._request("GET", f"/v1/transcriptions/{job_id}"))
+        body = await self._request("GET", f"/v1/transcriptions/{job_id}")
+        return self._parse(Job, body)
 
-    def delete_job(self, job_id: str) -> dict[str, Any]:
+    async def delete_job(self, job_id: str) -> dict[str, Any]:
         """DELETE /v1/transcriptions/{job_id} - remove a job, where supported.
 
         Works for any job type (transcription, summary, or tags).
@@ -296,11 +305,10 @@ class KawaClient(_BaseKawaClient):
         # _request() is genuinely Any (a response body could be any JSON
         # shape); DELETE's contract is known to be a dict, so cast rather
         # than widen this method's own, more useful, return type.
-        return cast(
-            dict[str, Any], self._request("DELETE", f"/v1/transcriptions/{job_id}")
-        )
+        body = await self._request("DELETE", f"/v1/transcriptions/{job_id}")
+        return cast(dict[str, Any], body)
 
-    def create_summary(
+    async def create_summary(
         self,
         transcription_job_id: str | None = None,
         *,
@@ -333,9 +341,9 @@ class KawaClient(_BaseKawaClient):
             body["transcription_job_id"] = transcription_job_id
         if transcript_text is not None:
             body["transcript_text"] = transcript_text
-        return self._parse(Job, self._request("POST", "/v1/summarize", json=body))
+        return self._parse(Job, await self._request("POST", "/v1/summarize", json=body))
 
-    def create_tags(
+    async def create_tags(
         self,
         transcription_job_id: str | None = None,
         *,
@@ -371,15 +379,15 @@ class KawaClient(_BaseKawaClient):
             body["transcription_job_id"] = transcription_job_id
         if transcript_text is not None:
             body["transcript_text"] = transcript_text
-        return self._parse(Job, self._request("POST", "/v1/tag", json=body))
+        return self._parse(Job, await self._request("POST", "/v1/tag", json=body))
 
-    def poll(
+    async def poll(
         self,
         job_id: str,
         *,
         interval: float = 2.0,
         max_attempts: int = 60,
-    ) -> Iterator[Job]:
+    ) -> AsyncIterator[Job]:
         """Yield the job on each poll until it reaches a terminal status.
 
         Poll ``GET /v1/transcriptions/{job_id}`` every ``interval`` seconds while
@@ -402,13 +410,13 @@ class KawaClient(_BaseKawaClient):
         """
         last_status = None
         for attempt in range(max_attempts):
-            job = self.get_job(job_id)
+            job = await self.get_job(job_id)
             last_status = job.status
             yield job
             if job.is_terminal:
                 return
             if attempt < max_attempts - 1:
-                time.sleep(interval)
+                await asyncio.sleep(interval)
         if max_attempts > 0:
             logger.warning(
                 "poll() gave up on job %s after %d attempts, still %s, "
@@ -420,7 +428,7 @@ class KawaClient(_BaseKawaClient):
                 last_status,
             )
 
-    def transcribe(
+    async def transcribe(
         self,
         file_path: str | Path,
         *,
@@ -453,9 +461,11 @@ class KawaClient(_BaseKawaClient):
             KawaError: If the API returns a non-2xx response.
             KawaValidationError: If a response doesn't match `Job`'s shape.
         """
-        job = self.create_transcription(file_path, language=language, metadata=metadata)
+        job = await self.create_transcription(
+            file_path, language=language, metadata=metadata
+        )
         final = job
-        for update in self.poll(
+        async for update in self.poll(
             job.job_id, interval=interval, max_attempts=max_attempts
         ):
             final = update
