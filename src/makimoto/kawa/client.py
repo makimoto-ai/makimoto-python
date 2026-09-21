@@ -7,15 +7,13 @@ import os
 import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 
 import httpx2
-from pydantic import BaseModel, ValidationError
 
-from .exceptions import KawaError, KawaValidationError
+from ._base import DEFAULT_API_URL, _BaseKawaClient
+from .exceptions import KawaError
 from .models import Job, TranscriptionPage
-
-DEFAULT_API_URL = "https://api.makimoto.ai"
 
 # Raw request/response logging already comes from httpx2's own "httpx2"
 # logger (enable it directly if that's all you need). This logger is only
@@ -28,10 +26,8 @@ DEFAULT_API_URL = "https://api.makimoto.ai"
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
-ModelT = TypeVar("ModelT", bound=BaseModel)
 
-
-class KawaClient:
+class KawaClient(_BaseKawaClient):
     """Minimal client for the Makimoto Kawa transcription API.
 
     Credentials: pass ``api_key`` explicitly, or omit it and set the
@@ -88,14 +84,8 @@ class KawaClient:
                 "no api_key argument given, using MAKIMOTO_API_KEY (%s)",
                 "found" if api_key else "not set",
             )
-        self.api_key = api_key.strip()
-        self.api_url = (api_url or DEFAULT_API_URL).rstrip("/")
-        self.timeout = timeout
+        super().__init__(api_key, api_url, timeout)
         self._session = session or httpx2.Client(follow_redirects=True)
-        # Metadata of the most recent HTTP response, for debugging.
-        self.last_status: int | None = None
-        self.last_headers: dict[str, str] = {}
-        self.last_url: str | None = None
 
     def close(self) -> None:
         """Close the underlying HTTP session, releasing pooled connections.
@@ -114,30 +104,6 @@ class KawaClient:
         self.close()
 
     # -- internals ---------------------------------------------------------- #
-
-    def _url(self, path: str) -> str:
-        """Join `api_url` and a path into a full request URL.
-
-        Args:
-            path (str): Path to append to ``api_url``.
-
-        Returns:
-            str: The joined request URL.
-        """
-        return f"{self.api_url}{path}"
-
-    def _headers(self) -> dict[str, str]:
-        """Build the Authorization header; raises if there's no API key.
-
-        Returns:
-            dict[str, str]: Headers containing ``Authorization: Bearer <api_key>``.
-
-        Raises:
-            ValueError: If no API key is available.
-        """
-        if not self.api_key:
-            raise ValueError("A Makimoto API key is required.")
-        return {"Authorization": f"Bearer {self.api_key}"}
 
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         """The one place every HTTP call goes through.
@@ -178,31 +144,6 @@ class KawaClient:
                 headers=dict(response.headers),
             )
         return body
-
-    def _parse(self, model: type[ModelT], body: Any) -> ModelT:
-        """Validate `body` against a pydantic model.
-
-        Wraps a `pydantic.ValidationError` as `KawaValidationError` (a
-        `KawaError` subclass), so a caller catching `KawaError` gets this
-        too, a 2xx response that doesn't match the expected shape is the
-        same practical problem as a bad status code, just found later.
-
-        Args:
-            model (type[ModelT]): The pydantic model class to validate against.
-            body (Any): The raw response body to validate.
-
-        Returns:
-            ModelT: The validated model instance.
-
-        Raises:
-            KawaValidationError: If ``body`` doesn't match ``model``'s shape.
-        """
-        try:
-            return model.model_validate(body)
-        except ValidationError as exc:
-            raise KawaValidationError(
-                self.last_status or 0, body, self.last_url or self.api_url, exc
-            ) from exc
 
     # -- endpoints ---------------------------------------------------------- #
 
