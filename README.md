@@ -132,6 +132,35 @@ with kawa.KawaClient(api_key="<your api key>") as client:
     ...
 ```
 
+## Async
+
+`AsyncKawaClient` mirrors `KawaClient` method-for-method (`async def` instead, backed by `httpx2.AsyncClient`). Use it inside an existing event loop, an async web app, an async worker, instead of blocking it with sync I/O:
+
+```python
+import asyncio
+from makimoto import kawa
+
+async def main():
+    async with kawa.AsyncKawaClient(api_key="<your api key>") as client:
+        job = await client.transcribe("call.mp3", language="en")
+        if job.status == "succeeded":
+            print(job.result.full_text)
+
+asyncio.run(main())
+```
+
+`poll()` and `iter_jobs()` are async generators, iterate with `async for`:
+
+```python
+async for update in client.poll(job.job_id):
+    print(update.status)
+
+async for job in client.iter_jobs(status="succeeded"):
+    print(job.job_id)
+```
+
+See [`examples/quickstart_async.py`](https://github.com/makimoto-ai/makimoto-python/blob/main/examples/quickstart_async.py) for a complete, runnable script.
+
 ## Errors
 
 Every call raises `kawa.KawaError` on an API-level failure (bad status code, or a response that doesn't match the expected shape), and `kawa.TimeoutError`-compatible `TimeoutError` from `transcribe()` if a job never finishes in time. A failed transcription job (`status == "failed"`) is not an exception, it's a normal result, check `.status`/`.error` as shown above.
@@ -153,7 +182,10 @@ import logging
 logging.basicConfig()  # attaches a handler so the lines below actually print somewhere
 logging.getLogger("makimoto.kawa.client").setLevel(
     logging.DEBUG
-)  # this SDK's own events
+)  # this SDK's own events (KawaClient)
+logging.getLogger("makimoto.kawa.async_client").setLevel(
+    logging.DEBUG
+)  # same, for AsyncKawaClient
 logging.getLogger("httpx2").setLevel(logging.DEBUG)  # every request/response
 ```
 
