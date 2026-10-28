@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 import logging
-import mimetypes
 import os
 import time
 from collections.abc import Iterator
@@ -11,7 +9,7 @@ from typing import Any, cast
 
 import httpx2
 
-from ._base import DEFAULT_API_URL, _BaseKawaClient
+from ._base import DEFAULT_API_URL, MULTIPART_MAX_BYTES, _BaseKawaClient, _Upload
 from .exceptions import KawaError
 from .models import Job, TranscriptionPage
 
@@ -229,37 +227,72 @@ class KawaClient(_BaseKawaClient):
         language: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> Job:
-        """POST /v1/transcriptions - submit a recording as multipart form-data.
+        """POST /v1/transcriptions - submit a recording for transcription.
+
+        Files up to 4 MB are sent in the request itself. Larger ones, up to the
+        API's 15 MB limit, are uploaded straight to storage first
+        (``POST /v1/uploads``) and the job is created from that upload.
 
         Args:
-            file_path (str | Path): Path to the audio/video file to upload.
+            file_path (str | Path): Path to the MP3 or WAV file to upload.
             language (str | None): Optional language hint for transcription.
             metadata (dict[str, Any] | None): Optional metadata to attach to
-                the job, sent as a JSON string.
+                the job.
 
         Returns:
             Job: The newly created job (typically ``queued`` or ``processing``).
 
         Raises:
-            KawaError: If the API returns a non-2xx response.
+            KawaError: If the API, or storage for a large file, returns a
+                non-2xx response.
             KawaValidationError: If the response doesn't match `Job`'s shape.
         """
         path = Path(file_path)
-        data: dict[str, str] = {}
-        if language:
-            data["language"] = language.strip()
-        if metadata:
-            data["metadata"] = json.dumps(metadata, separators=(",", ":"))
-        mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        with path.open("rb") as handle:
-            body = self._request(
+        mime = self._content_type(path)
+        if path.stat().st_size <= MULTIPART_MAX_BYTES:
+            with path.open("rb") as handle:
+                body = self._request(
+                    "POST",
+                    "/v1/transcriptions",
+                    files={"file": (path.name, handle, mime)},
+                    data=self._multipart_fields(language, metadata),
+                    timeout=120.0,
+                )
+            return self._parse(Job, body)
+
+        upload_id = self._upload(path, mime)
+        body = self._request(
+            "POST",
+            "/v1/transcriptions",
+            json=self._upload_job_body(upload_id, language, metadata),
+        )
+        return self._parse(Job, body)
+
+    def _upload(self, path: Path, mime: str) -> str:
+        """Send `path` to storage with a presigned form; return its upload_id.
+
+        Storage gets its own bare client, not `self._session`: the signed form is
+        its only credential, and a session's default headers (an API key, say)
+        must not reach it.
+        """
+        upload = self._parse(
+            _Upload,
+            self._request(
                 "POST",
-                "/v1/transcriptions",
+                "/v1/uploads",
+                json={"filename": path.name, "content_type": mime},
+            ),
+        )
+        self._check_upload_size(path, upload)
+        with httpx2.Client() as storage, path.open("rb") as handle:
+            response = storage.post(
+                upload.upload.url,
+                data=upload.upload.fields,
                 files={"file": (path.name, handle, mime)},
-                data=data,
                 timeout=120.0,
             )
-        return self._parse(Job, body)
+        self._check_storage_response(response)
+        return upload.upload_id
 
     def get_job(self, job_id: str) -> Job:
         """GET /v1/transcriptions/{job_id} - status, and result once done.
@@ -437,7 +470,7 @@ class KawaClient(_BaseKawaClient):
         a terminal status raises, since that's genuinely exceptional.
 
         Args:
-            file_path (str | Path): Path to the audio/video file to upload.
+            file_path (str | Path): Path to the MP3 or WAV file to upload.
             language (str | None): Optional language hint for transcription.
             metadata (dict[str, Any] | None): Optional metadata to attach to
                 the job.

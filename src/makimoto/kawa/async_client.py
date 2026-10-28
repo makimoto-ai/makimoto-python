@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import mimetypes
 import os
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -11,7 +9,7 @@ from typing import Any, cast
 
 import httpx2
 
-from ._base import DEFAULT_API_URL, _BaseKawaClient
+from ._base import DEFAULT_API_URL, MULTIPART_MAX_BYTES, _BaseKawaClient, _Upload
 from .exceptions import KawaError
 from .models import Job, TranscriptionPage
 
@@ -231,7 +229,11 @@ class AsyncKawaClient(_BaseKawaClient):
         language: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> Job:
-        """POST /v1/transcriptions - submit a recording as multipart form-data.
+        """POST /v1/transcriptions - submit a recording for transcription.
+
+        Files up to 4 MB are sent in the request itself. Larger ones, up to the
+        API's 15 MB limit, are uploaded straight to storage first
+        (``POST /v1/uploads``) and the job is created from that upload.
 
         Reads `file_path` with a plain, blocking `open()`, there's no async
         file I/O here, so a large file on a slow disk will still occupy the
@@ -240,34 +242,66 @@ class AsyncKawaClient(_BaseKawaClient):
         workload, read the file yourself off-thread and adapt this method.
 
         Args:
-            file_path (str | Path): Path to the audio/video file to upload.
+            file_path (str | Path): Path to the MP3 or WAV file to upload.
             language (str | None): Optional language hint for transcription.
             metadata (dict[str, Any] | None): Optional metadata to attach to
-                the job, sent as a JSON string.
+                the job.
 
         Returns:
             Job: The newly created job (typically ``queued`` or ``processing``).
 
         Raises:
-            KawaError: If the API returns a non-2xx response.
+            KawaError: If the API, or storage for a large file, returns a
+                non-2xx response.
             KawaValidationError: If the response doesn't match `Job`'s shape.
         """
         path = Path(file_path)
-        data: dict[str, str] = {}
-        if language:
-            data["language"] = language.strip()
-        if metadata:
-            data["metadata"] = json.dumps(metadata, separators=(",", ":"))
-        mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        with path.open("rb") as handle:
-            body = await self._request(
-                "POST",
-                "/v1/transcriptions",
-                files={"file": (path.name, handle, mime)},
-                data=data,
-                timeout=120.0,
-            )
+        mime = self._content_type(path)
+        if path.stat().st_size <= MULTIPART_MAX_BYTES:
+            with path.open("rb") as handle:
+                body = await self._request(
+                    "POST",
+                    "/v1/transcriptions",
+                    files={"file": (path.name, handle, mime)},
+                    data=self._multipart_fields(language, metadata),
+                    timeout=120.0,
+                )
+            return self._parse(Job, body)
+
+        upload_id = await self._upload(path, mime)
+        body = await self._request(
+            "POST",
+            "/v1/transcriptions",
+            json=self._upload_job_body(upload_id, language, metadata),
+        )
         return self._parse(Job, body)
+
+    async def _upload(self, path: Path, mime: str) -> str:
+        """Send `path` to storage with a presigned form; return its upload_id.
+
+        Storage gets its own bare client, not `self._session`: the signed form is
+        its only credential, and a session's default headers (an API key, say)
+        must not reach it.
+        """
+        upload = self._parse(
+            _Upload,
+            await self._request(
+                "POST",
+                "/v1/uploads",
+                json={"filename": path.name, "content_type": mime},
+            ),
+        )
+        self._check_upload_size(path, upload)
+        async with httpx2.AsyncClient() as storage:
+            with path.open("rb") as handle:
+                response = await storage.post(
+                    upload.upload.url,
+                    data=upload.upload.fields,
+                    files={"file": (path.name, handle, mime)},
+                    timeout=120.0,
+                )
+        self._check_storage_response(response)
+        return upload.upload_id
 
     async def get_job(self, job_id: str) -> Job:
         """GET /v1/transcriptions/{job_id} - status, and result once done.
@@ -445,7 +479,7 @@ class AsyncKawaClient(_BaseKawaClient):
         a terminal status raises, since that's genuinely exceptional.
 
         Args:
-            file_path (str | Path): Path to the audio/video file to upload.
+            file_path (str | Path): Path to the MP3 or WAV file to upload.
             language (str | None): Optional language hint for transcription.
             metadata (dict[str, Any] | None): Optional metadata to attach to
                 the job.
