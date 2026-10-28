@@ -69,7 +69,7 @@ else:
 
 See [`examples/quickstart.py`](https://github.com/makimoto-ai/makimoto-python/blob/main/examples/quickstart.py) for a complete, runnable script, it ships with a small sample audio file, so `python examples/quickstart.py` works out of the box once `MAKIMOTO_API_KEY` is set.
 
-`transcribe()` submits the recording and polls until it's done in one call, raising `TimeoutError` if it never finishes. For manual control, e.g. streaming live status updates to a UI, the lower-level primitives are still there:
+`transcribe()` submits the recording and polls until it's done in one call, raising `TimeoutError` if it never finishes. MP3 and WAV files up to 15 MB are accepted; anything over 4 MB is uploaded straight to storage first, automatically. For manual control, e.g. streaming live status updates to a UI, the lower-level primitives are still there:
 
 ```python
 job = client.create_transcription("call.mp3", language="en")

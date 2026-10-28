@@ -1,12 +1,35 @@
 from __future__ import annotations
 
+import html
+import json
+import mimetypes
+import re
+from pathlib import Path
 from typing import Any, TypeVar
 
+import httpx2
 from pydantic import BaseModel, ValidationError
 
-from .exceptions import KawaValidationError
+from .exceptions import KawaError, KawaValidationError
 
 DEFAULT_API_URL = "https://api.makimoto.ai"
+
+# Files above this size use a presigned upload rather than a direct one.
+MULTIPART_MAX_BYTES = 4 * 1024 * 1024
+
+
+class _UploadForm(BaseModel):
+    url: str
+    fields: dict[str, str]
+
+
+class _Upload(BaseModel):
+    """``POST /v1/uploads``'s response."""
+
+    upload_id: str
+    upload: _UploadForm
+    max_bytes: int | None = None
+
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
@@ -101,3 +124,65 @@ class _BaseKawaClient:
             raise KawaValidationError(
                 self.last_status or 0, body, self.last_url or self.api_url, exc
             ) from exc
+
+    # -- create_transcription helpers --------------------------------------- #
+
+    @staticmethod
+    def _content_type(path: Path) -> str:
+        return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
+    @staticmethod
+    def _multipart_fields(
+        language: str | None, metadata: dict[str, Any] | None
+    ) -> dict[str, str]:
+        fields: dict[str, str] = {}
+        if language and language.strip():
+            fields["language"] = language.strip()
+        if metadata:
+            fields["metadata"] = json.dumps(metadata, separators=(",", ":"))
+        return fields
+
+    @staticmethod
+    def _upload_job_body(
+        upload_id: str, language: str | None, metadata: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {"upload_id": upload_id}
+        if language and language.strip():
+            body["language"] = language.strip()
+        if metadata:
+            body["metadata"] = metadata
+        return body
+
+    @staticmethod
+    def _check_upload_size(path: Path, upload: _Upload) -> None:
+        """Refuse a file the upload form won't accept, before sending it."""
+        size = path.stat().st_size
+        if upload.max_bytes is not None and size > upload.max_bytes:
+            raise ValueError(
+                f"{path.name} is {size} bytes, over the {upload.max_bytes}-byte "
+                "upload limit."
+            )
+
+    def _check_storage_response(self, response: httpx2.Response) -> None:
+        """Record a storage upload's response; raise `KawaError` if it failed."""
+        self.last_status = response.status_code
+        self.last_headers = dict(response.headers)
+        self.last_url = str(response.url)
+        if response.status_code >= 300:
+            raise KawaError(
+                response.status_code,
+                {"error": _storage_error(response.text), "raw": response.text},
+                self.last_url,
+                headers=self.last_headers,
+            )
+
+
+def _storage_error(text: str) -> dict[str, str]:
+    """Storage's XML error body as ``{"code", "message"}``."""
+    code = re.search(r"<Code>([^<]*)</Code>", text)
+    message = re.search(r"<Message>([^<]*)</Message>", text)
+    return {
+        "code": code.group(1) if code else "",
+        "message": "Upload to storage failed"
+        + (f": {html.unescape(message.group(1))}" if message else ""),
+    }

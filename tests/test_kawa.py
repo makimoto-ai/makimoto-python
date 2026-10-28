@@ -15,6 +15,7 @@ from makimoto.kawa import (
     TagsResult,
     TranscriptResult,
 )
+from makimoto.kawa._base import MULTIPART_MAX_BYTES
 
 BASE_URL = "https://api.makimoto.ai"
 
@@ -760,3 +761,192 @@ def test_raises_when_no_credential_available(monkeypatch):
     client = KawaClient(api_url=BASE_URL)
     with pytest.raises(ValueError):
         client.list_jobs()
+
+
+# -- create_transcription: files over 4 MB go through a presigned upload ------ #
+
+UPLOAD = {
+    "upload_id": "up-1",
+    "upload": {
+        "url": "https://storage.example.com/upload",
+        "fields": {
+            "key": "up-1.mp3",
+            "Content-Type": "audio/mpeg",
+            "Policy": "p",
+        },
+    },
+    "expires_at": "2026-10-28T10:15:00.000Z",
+    "max_bytes": 15728640,
+}
+STORAGE_URL = UPLOAD["upload"]["url"]
+TOO_BIG = "Your proposed upload exceeds the maximum allowed size"
+
+
+def audio_of_size(tmp_path, size, name="long.mp3"):
+    audio_file = tmp_path / name
+    audio_file.write_bytes(b"\0" * size)
+    return audio_file
+
+
+def mock_upload(httpx2_mock, storage_response=None):
+    uploads = httpx2_mock.post(f"{BASE_URL}/v1/uploads").mock(
+        return_value=httpx.Response(201, json=UPLOAD)
+    )
+    storage = httpx2_mock.post(STORAGE_URL).mock(
+        return_value=storage_response or httpx.Response(204)
+    )
+    return uploads, storage
+
+
+def test_create_transcription_uploads_a_large_file_to_storage(httpx2_mock, tmp_path):
+    uploads, storage = mock_upload(httpx2_mock)
+    create = httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(202, json={"job_id": "new-job", "status": "queued"})
+    )
+
+    job = make_client().create_transcription(
+        audio_of_size(tmp_path, MULTIPART_MAX_BYTES + 1),
+        language=" en ",
+        metadata={"source": "test"},
+    )
+
+    assert job.job_id == "new-job"
+    assert json.loads(uploads.calls.last.request.content) == {
+        "filename": "long.mp3",
+        "content_type": "audio/mpeg",
+    }
+    assert storage.called
+    assert json.loads(create.calls.last.request.content) == {
+        "upload_id": "up-1",
+        "language": "en",
+        "metadata": {"source": "test"},
+    }
+
+
+def test_storage_gets_the_signed_fields_first_and_no_api_key(httpx2_mock, tmp_path):
+    _, storage = mock_upload(httpx2_mock)
+    httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(202, json={"job_id": "new-job", "status": "queued"})
+    )
+
+    make_client().create_transcription(audio_of_size(tmp_path, MULTIPART_MAX_BYTES + 1))
+
+    request = storage.calls.last.request
+    assert "authorization" not in request.headers
+    sent = request.content
+    positions = [
+        sent.index(f'name="{n}"'.encode())
+        for n in ("key", "Content-Type", "Policy", "file")
+    ]
+    assert positions == sorted(positions)
+
+
+def test_a_file_at_the_threshold_is_still_sent_directly(httpx2_mock, tmp_path):
+    create = httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(202, json={"job_id": "new-job", "status": "queued"})
+    )
+
+    make_client().create_transcription(audio_of_size(tmp_path, MULTIPART_MAX_BYTES))
+
+    assert b'name="file"' in create.calls.last.request.content
+
+
+def test_storage_refusal_raises_with_its_reason_and_creates_no_job(
+    httpx2_mock, tmp_path
+):
+    refusal = httpx.Response(
+        400,
+        text=f"<Error><Code>EntityTooLarge</Code><Message>{TOO_BIG}</Message></Error>",
+    )
+    mock_upload(httpx2_mock, storage_response=refusal)
+
+    with pytest.raises(KawaError) as exc_info:
+        make_client().create_transcription(
+            audio_of_size(tmp_path, MULTIPART_MAX_BYTES + 1)
+        )
+
+    assert exc_info.value.status_code == 400
+    assert str(exc_info.value) == f"Upload to storage failed: {TOO_BIG}"
+    assert exc_info.value.body["error"]["code"] == "EntityTooLarge"
+
+
+def test_an_upload_the_api_refuses_never_reaches_storage(httpx2_mock, tmp_path):
+    httpx2_mock.post(f"{BASE_URL}/v1/uploads").mock(
+        return_value=httpx.Response(
+            429,
+            json={"error": {"code": "TOO_MANY_OPEN_UPLOADS", "message": "Too many."}},
+        )
+    )
+
+    with pytest.raises(KawaError) as exc_info:
+        make_client().create_transcription(
+            audio_of_size(tmp_path, MULTIPART_MAX_BYTES + 1)
+        )
+
+    assert exc_info.value.status_code == 429
+
+
+def test_storage_gets_no_session_default_headers(httpx2_mock, tmp_path):
+    _, storage = mock_upload(httpx2_mock)
+    httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(202, json={"job_id": "new-job", "status": "queued"})
+    )
+    session = httpx2.Client(
+        headers={"Authorization": "Bearer session-default", "X-Extra": "1"}
+    )
+
+    make_client(session=session).create_transcription(
+        audio_of_size(tmp_path, MULTIPART_MAX_BYTES + 1)
+    )
+
+    headers = storage.calls.last.request.headers
+    assert "authorization" not in headers
+    assert "x-extra" not in headers
+
+
+def test_file_part_has_the_signed_content_type(httpx2_mock, tmp_path):
+    _, storage = mock_upload(httpx2_mock)
+    httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(202, json={"job_id": "new-job", "status": "queued"})
+    )
+
+    make_client().create_transcription(audio_of_size(tmp_path, MULTIPART_MAX_BYTES + 1))
+
+    sent = storage.calls.last.request.content
+    file_part = sent[sent.index(b'name="file"') :]
+    assert b"Content-Type: audio/mpeg" in file_part[:200]
+
+
+def test_a_file_over_the_upload_limit_is_refused_before_storage(httpx2_mock, tmp_path):
+    small_limit = {**UPLOAD, "max_bytes": MULTIPART_MAX_BYTES + 1}
+    httpx2_mock.post(f"{BASE_URL}/v1/uploads").mock(
+        return_value=httpx.Response(201, json=small_limit)
+    )
+
+    with pytest.raises(ValueError, match=r"over the .*-byte upload limit"):
+        make_client().create_transcription(
+            audio_of_size(tmp_path, MULTIPART_MAX_BYTES + 2)
+        )
+
+
+def test_a_malformed_upload_response_raises_validation_error(httpx2_mock, tmp_path):
+    httpx2_mock.post(f"{BASE_URL}/v1/uploads").mock(
+        return_value=httpx.Response(201, json={"unexpected": True})
+    )
+
+    with pytest.raises(KawaValidationError):
+        make_client().create_transcription(
+            audio_of_size(tmp_path, MULTIPART_MAX_BYTES + 1)
+        )
+
+
+def test_storage_error_message_is_unescaped(httpx2_mock, tmp_path):
+    refusal = httpx.Response(
+        403, text="<Error><Code>AccessDenied</Code><Message>A &amp; B</Message></Error>"
+    )
+    mock_upload(httpx2_mock, storage_response=refusal)
+
+    with pytest.raises(KawaError, match="Upload to storage failed: A & B"):
+        make_client().create_transcription(
+            audio_of_size(tmp_path, MULTIPART_MAX_BYTES + 1)
+        )
