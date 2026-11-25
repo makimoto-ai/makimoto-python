@@ -1,16 +1,25 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
+from asyncio import sleep
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, cast
 
 import httpx2
 
-from ._base import DEFAULT_API_URL, MULTIPART_MAX_BYTES, _BaseKawaClient, _Upload
-from .exceptions import KawaError
+from . import _base
+from ._base import (
+    DEFAULT_API_URL,
+    MULTIPART_MAX_BYTES,
+    POLL_TIMEOUT_SECONDS,
+    _BaseKawaClient,
+    _is_transient,
+    _PollSchedule,
+    _Upload,
+)
+from .exceptions import KawaError, KawaTimeoutError
 from .models import Job, TranscriptionPage
 
 # See client.py's own logger comment: same rationale, own logger (own
@@ -420,47 +429,81 @@ class AsyncKawaClient(_BaseKawaClient):
         job_id: str,
         *,
         interval: float = 2.0,
-        max_attempts: int = 60,
+        max_interval: float | None = None,
+        timeout: float | None = POLL_TIMEOUT_SECONDS,
+        max_attempts: int | None = None,
     ) -> AsyncIterator[Job]:
         """Yield the job on each poll until it reaches a terminal status.
 
-        Poll ``GET /v1/transcriptions/{job_id}`` every ``interval`` seconds while
-        the status is ``queued`` or ``processing``; stop on ``succeeded`` or
-        ``failed``. Yielding (rather than blocking) lets a UI show live updates.
-        Gives up silently after ``max_attempts``, use ``transcribe()`` instead if
-        you want a clear exception on timeout.
+        Poll ``GET /v1/transcriptions/{job_id}`` while the status is ``queued``
+        or ``processing``; stop on ``succeeded`` or ``failed``. Yielding (rather
+        than blocking) lets a UI show live updates.
+
+        The wait between checks starts at ``interval`` and grows by half each
+        time, up to ``max_interval``, so a long wait (the first job after an
+        idle period waits for the models to start) doesn't flood the API. A
+        429, a 5xx or a network error is retried after a wait (honouring
+        ``Retry-After``) rather than raised, until the time limit.
+
+        Gives up silently after ``timeout`` seconds or ``max_attempts`` checks,
+        whichever comes first; use ``transcribe()`` instead if you want a clear
+        exception on timeout.
 
         Args:
             job_id (str): The job's identifier.
-            interval (float): Seconds to sleep between polls.
-            max_attempts (int): Maximum number of polls before giving up.
+            interval (float): Seconds to wait before the second check.
+            max_interval (float | None): Longest wait between checks, in
+                seconds. Defaults to 15, or to ``interval`` (a fixed wait)
+                when ``max_attempts`` is given.
+            timeout (float | None): Seconds to keep polling, or ``None`` for
+                no time limit. Defaults to 20 minutes.
+            max_attempts (int | None): Maximum number of checks, or ``None``
+                for no limit.
 
         Yields:
             Job: The job's state on each poll.
 
         Raises:
-            KawaError: If the API returns a non-2xx response.
+            KawaError: If the API returns an error that isn't worth retrying,
+                or a temporary one is still failing at the time limit.
             KawaValidationError: If a response doesn't match `Job`'s shape.
+            httpx2.TransportError: If a network error is still failing at
+                the time limit.
         """
+        if max_attempts is not None and max_attempts <= 0:
+            return
+        schedule = _PollSchedule(interval, max_interval, timeout, max_attempts)
         last_status = None
-        for attempt in range(max_attempts):
-            job = await self.get_job(job_id)
+        while True:
+            try:
+                job = await self.get_job(job_id)
+            except (KawaError, httpx2.TransportError) as exc:
+                wait = schedule.after_error(exc)
+                if wait is None:
+                    raise
+                logger.info(
+                    "poll() retrying job %s in %.0f s after: %r", job_id, wait, exc
+                )
+                await sleep(wait)
+                continue
             last_status = job.status
             yield job
             if job.is_terminal:
                 return
-            if attempt < max_attempts - 1:
-                await asyncio.sleep(interval)
-        if max_attempts > 0:
-            logger.warning(
-                "poll() gave up on job %s after %d attempts, still %s, "
-                "no exception was raised, check the last yielded Job's "
-                ".is_terminal yourself (or use transcribe() instead, which "
-                "raises TimeoutError for this case)",
-                job_id,
-                max_attempts,
-                last_status,
-            )
+            wait = schedule.after_check()
+            if wait is None:
+                break
+            await sleep(wait)
+        logger.warning(
+            "poll() gave up on job %s after %.0f s and %d checks, still %s, "
+            "no exception was raised, check the last yielded Job's "
+            ".is_terminal yourself (or use transcribe() instead, which "
+            "raises KawaTimeoutError for this case)",
+            job_id,
+            schedule.elapsed,
+            schedule.attempts,
+            last_status,
+        )
 
     async def transcribe(
         self,
@@ -469,42 +512,65 @@ class AsyncKawaClient(_BaseKawaClient):
         language: str | None = None,
         metadata: dict[str, Any] | None = None,
         interval: float = 2.0,
-        max_attempts: int = 60,
+        max_interval: float | None = None,
+        timeout: float | None = POLL_TIMEOUT_SECONDS,
+        max_attempts: int | None = None,
     ) -> Job:
         """Submit and poll in one call. Raises on timeout, not on a failed job.
 
         A ``failed`` job is a normal outcome (bad audio, unsupported language),
         not a malfunction, returned like ``get_job()`` would, check
-        ``.status``/``.error``. Only exhausting ``max_attempts`` without reaching
-        a terminal status raises, since that's genuinely exceptional.
+        ``.status``/``.error``. Only running out of time (or ``max_attempts``)
+        without reaching a terminal status raises, since that's genuinely
+        exceptional.
+
+        The first job after an idle period waits for the models to start, so
+        the default time limit is 20 minutes. See `poll()` for how the wait
+        between checks grows and which errors are retried.
 
         Args:
             file_path (str | Path): Path to the MP3 or WAV file to upload.
             language (str | None): Optional language hint for transcription.
             metadata (dict[str, Any] | None): Optional metadata to attach to
                 the job.
-            interval (float): Seconds to sleep between polls.
-            max_attempts (int): Maximum number of polls before giving up.
+            interval (float): Seconds to wait before the second check.
+            max_interval (float | None): Longest wait between checks, in
+                seconds. Defaults to 15, or to ``interval`` (a fixed wait)
+                when ``max_attempts`` is given.
+            timeout (float | None): Seconds to keep polling, or ``None`` for
+                no time limit. Defaults to 20 minutes.
+            max_attempts (int | None): Maximum number of checks, or ``None``
+                for no limit.
 
         Returns:
             Job: The job in its terminal state (``succeeded`` or ``failed``).
 
         Raises:
-            TimeoutError: If ``max_attempts`` is exhausted before the job
-                reaches a terminal status.
+            KawaTimeoutError: If the job isn't done in time, including when a
+                temporary error (429, 5xx, network) is still failing at the
+                time limit. It carries the ``job_id``, so the job can be
+                picked up again with ``poll()``.
             KawaError: If the API returns a non-2xx response.
             KawaValidationError: If a response doesn't match `Job`'s shape.
         """
         job = await self.create_transcription(
             file_path, language=language, metadata=metadata
         )
+        started = _base._now()
         final = job
-        async for update in self.poll(
-            job.job_id, interval=interval, max_attempts=max_attempts
-        ):
-            final = update
+        try:
+            async for update in self.poll(
+                job.job_id,
+                interval=interval,
+                max_interval=max_interval,
+                timeout=timeout,
+                max_attempts=max_attempts,
+            ):
+                final = update
+        except (KawaError, httpx2.TransportError) as exc:
+            if not _is_transient(exc):
+                raise
+            raise KawaTimeoutError(job.job_id, final, _base._now() - started) from exc
         if not final.is_terminal:
-            raise TimeoutError(
-                f"Job {job.job_id} still processing after {max_attempts} checks"
-            )
+            raise KawaTimeoutError(job.job_id, final, _base._now() - started)
         return final

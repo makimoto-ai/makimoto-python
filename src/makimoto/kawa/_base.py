@@ -4,6 +4,7 @@ import html
 import json
 import mimetypes
 import re
+import time
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -16,6 +17,106 @@ DEFAULT_API_URL = "https://api.makimoto.ai"
 
 # Files above this size use a presigned upload rather than a direct one.
 MULTIPART_MAX_BYTES = 4 * 1024 * 1024
+
+# After an hour with no traffic the models shut down, and the next job waits
+# several minutes for them to start again.
+POLL_TIMEOUT_SECONDS = 1200.0
+MAX_POLL_INTERVAL_SECONDS = 15.0
+_POLL_BACKOFF = 1.5
+
+
+def _now() -> float:
+    return time.monotonic()
+
+
+def _retry_after_seconds(headers: dict[str, str]) -> float | None:
+    """A ``Retry-After`` header given in seconds; ``None`` if absent or a date."""
+    for name, value in headers.items():
+        if name.lower() == "retry-after":
+            try:
+                return max(0.0, float(value))
+            except ValueError:
+                return None
+    return None
+
+
+_TRANSIENT_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+
+def _is_transient(exc: Exception) -> bool:
+    """A network error, 429 or gateway-type 5xx: worth retrying ``get_job``."""
+    if isinstance(exc, httpx2.TransportError):
+        return True
+    return isinstance(exc, KawaError) and exc.status_code in _TRANSIENT_STATUSES
+
+
+class _PollSchedule:
+    """How long `poll()` waits between checks, and when it stops.
+
+    Shared by both clients so the sync and async loops can't drift apart.
+    The wait starts at ``interval`` and grows by half each check up to
+    ``max_interval``. ``max_interval=None`` means 15 s, or a fixed
+    ``interval`` when ``max_attempts`` is given, so a caller who sized
+    ``max_attempts`` for a fixed wait still gets one. ``timeout`` (seconds,
+    or ``None`` for no limit) and ``max_attempts`` (or ``None``) both end
+    the loop, whichever comes first.
+    """
+
+    def __init__(
+        self,
+        interval: float,
+        max_interval: float | None,
+        timeout: float | None,
+        max_attempts: int | None,
+    ) -> None:
+        if max_interval is None:
+            max_interval = (
+                interval if max_attempts is not None else MAX_POLL_INTERVAL_SECONDS
+            )
+        self._interval = interval
+        self._max_interval = max(max_interval, interval)
+        self._max_attempts = max_attempts
+        self._started = _now()
+        self._deadline = None if timeout is None else self._started + timeout
+        self.attempts = 0
+
+    @property
+    def elapsed(self) -> float:
+        return _now() - self._started
+
+    def _next_wait(self) -> float:
+        wait = self._interval
+        self._interval = min(self._interval * _POLL_BACKOFF, self._max_interval)
+        return wait
+
+    def _out_of_attempts(self) -> bool:
+        return self._max_attempts is not None and self.attempts >= self._max_attempts
+
+    def _fit_to_deadline(self, wait: float) -> float | None:
+        if self._deadline is None:
+            return wait
+        remaining = self._deadline - _now()
+        # One last check at the deadline itself, then stop.
+        return min(wait, remaining) if remaining > 0 else None
+
+    def after_check(self) -> float | None:
+        """Seconds to wait before the next check, or ``None`` to stop."""
+        self.attempts += 1
+        if self._out_of_attempts():
+            return None
+        return self._fit_to_deadline(self._next_wait())
+
+    def after_error(self, exc: Exception) -> float | None:
+        """Seconds to wait before retrying a failed check, or ``None`` to raise."""
+        self.attempts += 1
+        if not _is_transient(exc) or self._out_of_attempts():
+            return None
+        wait = self._next_wait()
+        if isinstance(exc, KawaError):
+            retry_after = _retry_after_seconds(exc.headers)
+            if retry_after is not None:
+                wait = retry_after
+        return self._fit_to_deadline(wait)
 
 
 class _UploadForm(BaseModel):
