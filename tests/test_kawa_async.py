@@ -10,6 +10,7 @@ import pytest
 from makimoto.kawa import (
     AsyncKawaClient,
     KawaError,
+    KawaTimeoutError,
     KawaValidationError,
     SummaryResult,
     TranscriptResult,
@@ -730,3 +731,122 @@ async def test_storage_error_message_is_unescaped(httpx2_mock, tmp_path):
         await make_client().create_transcription(
             audio_of_size(tmp_path, MULTIPART_MAX_BYTES + 1)
         )
+
+
+# -- poll: time limit, backoff and temporary errors ---------------------------------- #
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """Fake time: sleeping moves the clock on instead of waiting."""
+    state = {"now": 0.0, "sleeps": []}
+
+    async def fake_sleep(seconds):
+        state["sleeps"].append(seconds)
+        state["now"] += seconds
+
+    monkeypatch.setattr("makimoto.kawa._base._now", lambda: state["now"])
+    monkeypatch.setattr("makimoto.kawa.async_client.sleep", fake_sleep)
+    return state
+
+
+async def test_poll_waits_longer_between_checks_up_to_15_seconds(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=httpx.Response(200, json={"job_id": "abc", "status": "processing"})
+    )
+    updates = [job async for job in make_client().poll("abc", timeout=60)]
+    assert clock["sleeps"] == [2, 3, 4.5, 6.75, 10.125, 15, 15, 3.625]
+    assert len(updates) == 9
+
+
+async def test_transcribe_waits_20_minutes_by_default_then_raises_with_the_job_id(
+    httpx2_mock, clock, tmp_path
+):
+    audio_file = tmp_path / "call.mp3"
+    audio_file.write_bytes(b"fake audio bytes")
+    httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(202, json={"job_id": "abc", "status": "queued"})
+    )
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=httpx.Response(200, json={"job_id": "abc", "status": "processing"})
+    )
+    with pytest.raises(KawaTimeoutError) as raised:
+        await make_client().transcribe(audio_file)
+    assert raised.value.job_id == "abc"
+    assert raised.value.waited == 1200
+
+
+async def test_poll_retries_temporary_errors_honouring_retry_after(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        side_effect=[
+            httpx.Response(429, headers={"Retry-After": "7"}, json={}),
+            httpx2.ConnectError("connection reset"),
+            httpx.Response(200, json={"job_id": "abc", "status": "succeeded"}),
+        ]
+    )
+    updates = [job async for job in make_client().poll("abc")]
+    assert clock["sleeps"] == [7, 3]
+    assert updates[-1].status == "succeeded"
+
+
+async def test_poll_raises_an_error_that_is_not_temporary_at_once(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=httpx.Response(404, json={"error": {"code": "JOB_NOT_FOUND"}})
+    )
+    with pytest.raises(KawaError):
+        [job async for job in make_client().poll("abc")]
+    assert clock["sleeps"] == []
+
+
+async def test_poll_keeps_a_fixed_wait_for_callers_who_pass_max_attempts(
+    httpx2_mock, clock
+):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=httpx.Response(200, json={"job_id": "abc", "status": "processing"})
+    )
+    updates = [job async for job in make_client().poll("abc", max_attempts=4)]
+    assert clock["sleeps"] == [2, 2, 2]
+    assert len(updates) == 4
+
+
+async def test_transcribe_raises_timeout_when_errors_outlast_the_limit(
+    httpx2_mock, clock, tmp_path
+):
+    audio_file = tmp_path / "call.mp3"
+    audio_file.write_bytes(b"fake audio bytes")
+    httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(202, json={"job_id": "abc", "status": "queued"})
+    )
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=httpx.Response(503, json={})
+    )
+    with pytest.raises(KawaTimeoutError) as raised:
+        await make_client().transcribe(audio_file, timeout=10)
+    assert clock["sleeps"] == [2, 3, 4.5, 0.5]
+    assert raised.value.job_id == "abc"
+    assert isinstance(raised.value.__cause__, KawaError)
+
+
+async def test_poll_does_not_retry_a_501(httpx2_mock, clock):
+    route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=httpx.Response(501, json={})
+    )
+    with pytest.raises(KawaError):
+        [job async for job in make_client().poll("abc")]
+    assert route.call_count == 1
+
+
+async def test_poll_keeps_the_backoff_when_retry_after_is_zero(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        side_effect=[
+            httpx.Response(429, headers={"Retry-After": "0"}, json={}),
+            httpx.Response(200, json={"job_id": "abc", "status": "succeeded"}),
+        ]
+    )
+    [job async for job in make_client().poll("abc")]
+    assert clock["sleeps"] == [2]
+
+
+async def test_poll_makes_no_checks_when_max_attempts_is_zero(httpx2_mock, clock):
+    # No route is mocked, so any request would fail the test.
+    assert [job async for job in make_client().poll("abc", max_attempts=0)] == []

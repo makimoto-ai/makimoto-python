@@ -38,7 +38,7 @@ Or, inside an existing event loop, `AsyncKawaClient` instead:
 
 from .async_client import AsyncKawaClient
 from .client import DEFAULT_API_URL, KawaClient
-from .exceptions import KawaError, KawaValidationError
+from .exceptions import KawaError, KawaTimeoutError, KawaValidationError
 from .models import (
     TERMINAL_STATUSES,
     Job,
@@ -58,6 +58,7 @@ __all__ = [
     "JobError",
     "KawaClient",
     "KawaError",
+    "KawaTimeoutError",
     "KawaValidationError",
     "Segment",
     "SummaryResult",

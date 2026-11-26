@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import pickle
 
 import httpx
 import httpx2
@@ -10,6 +11,7 @@ import pytest
 from makimoto.kawa import (
     KawaClient,
     KawaError,
+    KawaTimeoutError,
     KawaValidationError,
     SummaryResult,
     TagsResult,
@@ -950,3 +952,220 @@ def test_storage_error_message_is_unescaped(httpx2_mock, tmp_path):
         make_client().create_transcription(
             audio_of_size(tmp_path, MULTIPART_MAX_BYTES + 1)
         )
+
+
+# -- poll: time limit, backoff and temporary errors ---------------------------------- #
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """Fake time: sleeping moves the clock on instead of waiting."""
+    state = {"now": 0.0, "sleeps": []}
+
+    def fake_sleep(seconds):
+        state["sleeps"].append(seconds)
+        state["now"] += seconds
+
+    monkeypatch.setattr("makimoto.kawa._base._now", lambda: state["now"])
+    monkeypatch.setattr("makimoto.kawa.client.sleep", fake_sleep)
+    return state
+
+
+def processing():
+    return httpx.Response(200, json={"job_id": "abc", "status": "processing"})
+
+
+def succeeded():
+    return httpx.Response(200, json={"job_id": "abc", "status": "succeeded"})
+
+
+def test_poll_waits_longer_between_checks_up_to_15_seconds(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(return_value=processing())
+    updates = list(make_client().poll("abc", timeout=60))
+    assert clock["sleeps"] == [2, 3, 4.5, 6.75, 10.125, 15, 15, 3.625]
+    assert clock["now"] == 60
+    assert len(updates) == 9
+
+
+def test_poll_gives_up_at_the_time_limit_with_a_warning(httpx2_mock, clock, caplog):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(return_value=processing())
+    with caplog.at_level(logging.WARNING, logger="makimoto.kawa.client"):
+        updates = list(make_client().poll("abc", timeout=30))
+    assert not updates[-1].is_terminal
+    assert clock["now"] == 30
+    assert "after 30 s" in caplog.records[0].message
+
+
+def test_transcribe_waits_20_minutes_by_default_then_raises_with_the_job_id(
+    httpx2_mock, clock, tmp_path
+):
+    audio_file = tmp_path / "call.mp3"
+    audio_file.write_bytes(b"fake audio bytes")
+    httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(202, json={"job_id": "abc", "status": "queued"})
+    )
+    route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=processing()
+    )
+    with pytest.raises(KawaTimeoutError) as raised:
+        make_client().transcribe(audio_file)
+    assert isinstance(raised.value, TimeoutError)
+    assert raised.value.job_id == "abc"
+    assert raised.value.last_job.status == "processing"
+    assert raised.value.waited == 1200
+    assert route.call_count < 100
+
+
+def test_poll_retries_a_429_after_its_retry_after(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        side_effect=[
+            httpx.Response(429, headers={"Retry-After": "7"}, json={}),
+            succeeded(),
+        ]
+    )
+    updates = list(make_client().poll("abc"))
+    assert clock["sleeps"] == [7]
+    assert updates[-1].status == "succeeded"
+
+
+def test_poll_retries_a_5xx_and_a_network_error(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        side_effect=[
+            httpx2.ConnectError("connection reset"),
+            httpx.Response(503, json={}),
+            succeeded(),
+        ]
+    )
+    updates = list(make_client().poll("abc"))
+    assert clock["sleeps"] == [2, 3]
+    assert [u.status for u in updates] == ["succeeded"]
+
+
+def test_poll_raises_an_error_that_is_not_temporary_at_once(httpx2_mock, clock):
+    route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=httpx.Response(404, json={"error": {"code": "JOB_NOT_FOUND"}})
+    )
+    with pytest.raises(KawaError) as raised:
+        list(make_client().poll("abc"))
+    assert raised.value.status_code == 404
+    assert route.call_count == 1
+    assert clock["sleeps"] == []
+
+
+def test_poll_raises_a_temporary_error_that_outlasts_the_time_limit(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=httpx.Response(503, json={})
+    )
+    with pytest.raises(KawaError) as raised:
+        list(make_client().poll("abc", timeout=10))
+    assert raised.value.status_code == 503
+    assert clock["sleeps"] == [2, 3, 4.5, 0.5]
+    assert clock["now"] == 10
+
+
+def test_poll_keeps_a_fixed_wait_when_max_interval_equals_interval(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(return_value=processing())
+    list(make_client().poll("abc", interval=5, max_interval=5))
+    assert set(clock["sleeps"]) == {5}
+
+
+def test_poll_keeps_a_fixed_wait_for_callers_who_pass_max_attempts(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(return_value=processing())
+    updates = list(make_client().poll("abc", max_attempts=4))
+    assert clock["sleeps"] == [2, 2, 2]
+    assert len(updates) == 4
+
+
+def test_poll_counts_failed_checks_towards_max_attempts(httpx2_mock, clock):
+    route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=httpx.Response(503, json={})
+    )
+    with pytest.raises(KawaError):
+        list(make_client().poll("abc", max_attempts=3))
+    assert route.call_count == 3
+
+
+def test_poll_makes_no_checks_when_max_attempts_is_zero(httpx2_mock, clock):
+    # No route is mocked, so any request would fail the test.
+    assert list(make_client().poll("abc", max_attempts=0)) == []
+
+
+def test_poll_keeps_the_backoff_when_retry_after_is_zero(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        side_effect=[
+            httpx.Response(429, headers={"Retry-After": "0"}, json={}),
+            succeeded(),
+        ]
+    )
+    list(make_client().poll("abc"))
+    assert clock["sleeps"] == [2]
+
+
+def test_poll_does_not_retry_a_501(httpx2_mock, clock):
+    route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=httpx.Response(501, json={})
+    )
+    with pytest.raises(KawaError):
+        list(make_client().poll("abc"))
+    assert route.call_count == 1
+
+
+def test_transcribe_raises_timeout_when_a_retry_after_runs_past_the_limit(
+    httpx2_mock, clock, tmp_path
+):
+    audio_file = tmp_path / "call.mp3"
+    audio_file.write_bytes(b"fake audio bytes")
+    httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(202, json={"job_id": "abc", "status": "queued"})
+    )
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=httpx.Response(429, headers={"Retry-After": "60"}, json={})
+    )
+    with pytest.raises(KawaTimeoutError) as raised:
+        make_client().transcribe(audio_file, timeout=50)
+    assert clock["sleeps"] == [50]
+    assert raised.value.job_id == "abc"
+    assert raised.value.last_job.status == "queued"
+    assert isinstance(raised.value.__cause__, KawaError)
+
+
+def test_timeout_error_survives_pickling():
+    from makimoto.kawa import Job
+
+    error = KawaTimeoutError("abc", Job(job_id="abc", status="processing"), 1200.0)
+    copy = pickle.loads(pickle.dumps(error))
+    assert (copy.job_id, copy.last_job.status, copy.waited) == (
+        "abc",
+        "processing",
+        1200.0,
+    )
+
+
+def test_poll_uses_the_backoff_when_retry_after_is_a_date(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        side_effect=[
+            httpx.Response(
+                503, headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"}, json={}
+            ),
+            succeeded(),
+        ]
+    )
+    list(make_client().poll("abc"))
+    assert clock["sleeps"] == [2]
+
+
+def test_transcribe_raises_kawa_error_for_a_non_temporary_error_mid_poll(
+    httpx2_mock, clock, tmp_path
+):
+    audio_file = tmp_path / "call.mp3"
+    audio_file.write_bytes(b"fake audio bytes")
+    httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(202, json={"job_id": "abc", "status": "queued"})
+    )
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        side_effect=[processing(), httpx.Response(401, json={})]
+    )
+    with pytest.raises(KawaError) as raised:
+        make_client().transcribe(audio_file)
+    assert raised.value.status_code == 401
+    assert not isinstance(raised.value, TimeoutError)

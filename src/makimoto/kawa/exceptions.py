@@ -1,6 +1,43 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .models import Job
+
+
+class KawaTimeoutError(TimeoutError):
+    """Raised by ``transcribe()`` when the job isn't done within its time limit.
+
+    The job is not cancelled: it carries on server-side, so pass ``job_id``
+    to ``poll()`` or ``get_job()`` to pick it up again. A subclass of the
+    built-in ``TimeoutError``, so ``except TimeoutError`` catches this too.
+
+    Attributes:
+        job_id (str): The job that was still running.
+        last_job (Job): The job's state at the last check.
+        waited (float): Seconds spent polling before giving up.
+    """
+
+    def __init__(self, job_id: str, last_job: Job, waited: float):
+        """Initialise the error.
+
+        Args:
+            job_id (str): The job that was still running.
+            last_job (Job): The job's state at the last check.
+            waited (float): Seconds spent polling before giving up.
+        """
+        self.job_id = job_id
+        self.last_job = last_job
+        self.waited = waited
+        super().__init__(
+            f"Job {job_id} still {last_job.status} after {waited:.0f} s. It carries "
+            "on server-side: pick it up with poll(job_id) or get_job(job_id)."
+        )
+
+    def __reduce__(self):
+        # args holds only the message, so the default would call cls(message).
+        return (type(self), (self.job_id, self.last_job, self.waited))
 
 
 class KawaError(RuntimeError):
