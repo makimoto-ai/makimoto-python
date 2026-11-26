@@ -114,8 +114,9 @@ class _PollSchedule:
         wait = self._next_wait()
         if isinstance(exc, KawaError):
             retry_after = _retry_after_seconds(exc.headers)
+            # Never shorter than the backoff, so Retry-After: 0 can't spin.
             if retry_after is not None:
-                wait = retry_after
+                wait = max(retry_after, wait)
         return self._fit_to_deadline(wait)
 
 

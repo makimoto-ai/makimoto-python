@@ -436,8 +436,9 @@ class KawaClient(_BaseKawaClient):
         429, a 5xx or a network error is retried after a wait (honouring
         ``Retry-After``) rather than raised, until the time limit.
 
-        Gives up silently after ``timeout`` seconds or ``max_attempts`` checks,
-        whichever comes first; use ``transcribe()`` instead if you want a clear
+        Stops without raising after ``timeout`` seconds or ``max_attempts``
+        checks, whichever comes first (unless the last check itself fails,
+        see Raises); use ``transcribe()`` instead if you want a clear
         exception on timeout.
 
         Args:
@@ -541,7 +542,8 @@ class KawaClient(_BaseKawaClient):
                 temporary error (429, 5xx, network) is still failing at the
                 time limit. It carries the ``job_id``, so the job can be
                 picked up again with ``poll()``.
-            KawaError: If the API returns a non-2xx response.
+            KawaError: If the API returns an error that isn't worth retrying,
+                such as a 400, 401 or 404.
             KawaValidationError: If a response doesn't match `Job`'s shape.
         """
         job = self.create_transcription(file_path, language=language, metadata=metadata)

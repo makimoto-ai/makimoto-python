@@ -825,3 +825,28 @@ async def test_transcribe_raises_timeout_when_errors_outlast_the_limit(
     assert clock["sleeps"] == [2, 3, 4.5, 0.5]
     assert raised.value.job_id == "abc"
     assert isinstance(raised.value.__cause__, KawaError)
+
+
+async def test_poll_does_not_retry_a_501(httpx2_mock, clock):
+    route = httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        return_value=httpx.Response(501, json={})
+    )
+    with pytest.raises(KawaError):
+        [job async for job in make_client().poll("abc")]
+    assert route.call_count == 1
+
+
+async def test_poll_keeps_the_backoff_when_retry_after_is_zero(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        side_effect=[
+            httpx.Response(429, headers={"Retry-After": "0"}, json={}),
+            httpx.Response(200, json={"job_id": "abc", "status": "succeeded"}),
+        ]
+    )
+    [job async for job in make_client().poll("abc")]
+    assert clock["sleeps"] == [2]
+
+
+async def test_poll_makes_no_checks_when_max_attempts_is_zero(httpx2_mock, clock):
+    # No route is mocked, so any request would fail the test.
+    assert [job async for job in make_client().poll("abc", max_attempts=0)] == []

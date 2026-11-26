@@ -19,7 +19,7 @@ else:
 
 See the [quickstart examples](https://github.com/makimoto-ai/makimoto-python/blob/main/examples/quickstart.py) for a complete, runnable script; it ships with a small sample audio file, so `python examples/quickstart.py` works out of the box once `MAKIMOTO_API_KEY` is set.
 
-`transcribe()` submits the recording and polls until it's done in one call. After an hour with no traffic the models shut down, and the next job waits several minutes for them to start again, so it keeps polling for up to 20 minutes (`timeout=`), checking less often as the wait goes on and riding out a 429, a 5xx or a network error. If the job still isn't done it raises `KawaTimeoutError` with the `job_id`; the job carries on server-side, so pick it up with `poll(exc.job_id)`. For manual control (e.g. streaming live status updates to a UI), the lower-level primitives are still there:
+`transcribe()` submits the recording and polls until it's done in one call. After an hour with no traffic the models shut down, and the next job waits several minutes for them to start again, so it keeps polling for up to 20 minutes (`timeout=`), checking less often as the wait goes on and retrying after a 429, a 500, 502, 503 or 504, or a network error. If the job still isn't done it raises `KawaTimeoutError` with the `job_id`; the job carries on server-side, so pick it up with `poll(exc.job_id)`. For manual control (e.g. streaming live status updates to a UI), the lower-level primitives are still there:
 
 ```python
 job = client.create_transcription("call.mp3", language="en")

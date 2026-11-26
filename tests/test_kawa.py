@@ -1090,7 +1090,7 @@ def test_poll_makes_no_checks_when_max_attempts_is_zero(httpx2_mock, clock):
     assert list(make_client().poll("abc", max_attempts=0)) == []
 
 
-def test_poll_honours_a_retry_after_of_zero(httpx2_mock, clock):
+def test_poll_keeps_the_backoff_when_retry_after_is_zero(httpx2_mock, clock):
     httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
         side_effect=[
             httpx.Response(429, headers={"Retry-After": "0"}, json={}),
@@ -1098,7 +1098,7 @@ def test_poll_honours_a_retry_after_of_zero(httpx2_mock, clock):
         ]
     )
     list(make_client().poll("abc"))
-    assert clock["sleeps"] == [0]
+    assert clock["sleeps"] == [2]
 
 
 def test_poll_does_not_retry_a_501(httpx2_mock, clock):
@@ -1139,3 +1139,33 @@ def test_timeout_error_survives_pickling():
         "processing",
         1200.0,
     )
+
+
+def test_poll_uses_the_backoff_when_retry_after_is_a_date(httpx2_mock, clock):
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        side_effect=[
+            httpx.Response(
+                503, headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"}, json={}
+            ),
+            succeeded(),
+        ]
+    )
+    list(make_client().poll("abc"))
+    assert clock["sleeps"] == [2]
+
+
+def test_transcribe_raises_kawa_error_for_a_non_temporary_error_mid_poll(
+    httpx2_mock, clock, tmp_path
+):
+    audio_file = tmp_path / "call.mp3"
+    audio_file.write_bytes(b"fake audio bytes")
+    httpx2_mock.post(f"{BASE_URL}/v1/transcriptions").mock(
+        return_value=httpx.Response(202, json={"job_id": "abc", "status": "queued"})
+    )
+    httpx2_mock.get(f"{BASE_URL}/v1/transcriptions/abc").mock(
+        side_effect=[processing(), httpx.Response(401, json={})]
+    )
+    with pytest.raises(KawaError) as raised:
+        make_client().transcribe(audio_file)
+    assert raised.value.status_code == 401
+    assert not isinstance(raised.value, TimeoutError)
